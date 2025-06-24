@@ -1,11 +1,49 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { useState } from 'react';
+import Header from '@/components/Header';
+import Navigation from '@/components/Navigation';
+import Dashboard from '@/components/Dashboard';
+import ClientManagement from '@/components/ClientManagement';
+import PosturalAssessment from '@/components/PosturalAssessment';
 
 const Index = () => {
+  const [currentView, setCurrentView] = useState('dashboard');
+
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'clients':
+        return <ClientManagement />;
+      case 'assessment':
+        return <PosturalAssessment />;
+      case 'progress':
+        return (
+          <div className="p-8 text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Relatórios de Progresso</h2>
+            <p className="text-gray-600">Esta seção está em desenvolvimento.</p>
+          </div>
+        );
+      case 'settings':
+        return (
+          <div className="p-8 text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Configurações</h2>
+            <p className="text-gray-600">Esta seção está em desenvolvimento.</p>
+          </div>
+        );
+      default:
+        return <Dashboard />;
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="flex">
+        <Navigation currentView={currentView} onViewChange={setCurrentView} />
+        <main className="flex-1 p-6">
+          {renderCurrentView()}
+        </main>
       </div>
     </div>
   );
