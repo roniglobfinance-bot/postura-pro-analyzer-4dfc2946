@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react';
-import { Canvas as FabricCanvas, Line, Circle, Text } from 'fabric';
+import { Canvas as FabricCanvas, Line, Circle, Text, FabricImage } from 'fabric';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Ruler, Minus, RotateCcw, Save } from 'lucide-react';
@@ -20,11 +20,6 @@ interface PhotoCanvasProps {
 const PhotoCanvas = ({ photo, clientHeight, onSaveMeasurements, showMeasurements }: PhotoCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [activeTools, setActiveTools] = useState({
-    horizontal: false,
-    vertical: false,
-    angular: false
-  });
   const [measurements, setMeasurements] = useState<any[]>(photo.measurements || []);
   const [calibrationPixelsPerCm, setCalibrationPixelsPerCm] = useState(1);
 
@@ -38,13 +33,12 @@ const PhotoCanvas = ({ photo, clientHeight, onSaveMeasurements, showMeasurements
       selection: true
     });
 
-    // Carregar imagem de fundo
-    const img = new Image();
-    img.onload = () => {
-      const imgWidth = img.width;
-      const imgHeight = img.height;
+    // Load background image using Fabric.js v6 API
+    FabricImage.fromURL(photo.imageUrl).then((img) => {
+      const imgWidth = img.width || 800;
+      const imgHeight = img.height || 600;
       
-      // Calcular escala para caber no canvas
+      // Calculate scale to fit in canvas
       const scale = Math.min(800 / imgWidth, 600 / imgHeight);
       const scaledWidth = imgWidth * scale;
       const scaledHeight = imgHeight * scale;
@@ -54,17 +48,22 @@ const PhotoCanvas = ({ photo, clientHeight, onSaveMeasurements, showMeasurements
         height: scaledHeight
       });
 
-      canvas.setBackgroundImage(photo.imageUrl, canvas.renderAll.bind(canvas), {
-        scaleX: scale,
-        scaleY: scale
-      });
+      // Set as background image using v6 API
+      img.scale(scale);
+      canvas.backgroundImage = img;
+      canvas.renderAll();
 
-      // Calibração automática baseada na altura do cliente
-      // Assumindo que a pessoa ocupa cerca de 80% da altura da imagem
+      // Auto calibration based on client height
       const estimatedPersonHeightInPixels = scaledHeight * 0.8;
       setCalibrationPixelsPerCm(estimatedPersonHeightInPixels / clientHeight);
-    };
-    img.src = photo.imageUrl;
+    }).catch((error) => {
+      console.error('Error loading image:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar a imagem.",
+        variant: "destructive"
+      });
+    });
 
     setFabricCanvas(canvas);
 
