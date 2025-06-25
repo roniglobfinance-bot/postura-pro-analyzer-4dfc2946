@@ -1,10 +1,10 @@
-
 import { useState } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import Dashboard from '@/components/Dashboard';
 import ClientManagement from '@/components/ClientManagement';
 import PosturalAssessment from '@/components/PosturalAssessment';
+import PhotoDocumentation from '@/components/PhotoDocumentation';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -17,6 +17,8 @@ const Index = () => {
         return <ClientManagement />;
       case 'assessment':
         return <PosturalAssessment />;
+      case 'photo-docs':
+        return <PhotoDocumentation />;
       case 'progress':
         return (
           <div className="p-8 text-center">

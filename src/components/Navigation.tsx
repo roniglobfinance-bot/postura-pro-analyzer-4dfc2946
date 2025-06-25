@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { Home, Users, ClipboardList, TrendingUp, Settings } from 'lucide-react';
+import { Home, Users, ClipboardList, TrendingUp, Settings, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavigationProps {
@@ -13,6 +12,7 @@ const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'clients', label: 'Clientes', icon: Users },
     { id: 'assessment', label: 'Avaliação', icon: ClipboardList },
+    { id: 'photo-docs', label: 'Fotos & Medições', icon: Camera },
     { id: 'progress', label: 'Progresso', icon: TrendingUp },
     { id: 'settings', label: 'Configurações', icon: Settings },
   ];
