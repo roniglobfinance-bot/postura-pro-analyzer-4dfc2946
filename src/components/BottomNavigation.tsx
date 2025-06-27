@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Home, BarChart3, Dumbbell, User } from 'lucide-react';
+import { Home, BarChart3, Dumbbell, User, Camera } from 'lucide-react';
 
 interface BottomNavigationProps {
   currentView: string;
@@ -10,6 +10,7 @@ interface BottomNavigationProps {
 const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) => {
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: Home },
+    { id: 'photo-docs', label: 'Análise', icon: Camera },
     { id: 'progress', label: 'Relatório', icon: BarChart3 },
     { id: 'workouts', label: 'Treinos', icon: Dumbbell },
     { id: 'profile', label: 'Perfil', icon: User },
@@ -25,11 +26,11 @@ const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) 
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className={`flex flex-col items-center justify-center p-2 min-w-0 flex-1 ${
+              className={`flex flex-col items-center justify-center p-2 min-w-0 flex-1 transition-colors ${
                 isActive ? 'text-[#2E5A88]' : 'text-gray-500'
               }`}
             >
-              <Icon className={`h-6 w-6 mb-1 ${isActive ? 'text-[#2E5A88]' : 'text-gray-500'}`} />
+              <Icon className={`h-5 w-5 mb-1 ${isActive ? 'text-[#2E5A88]' : 'text-gray-500'}`} />
               <span className={`text-xs truncate ${isActive ? 'text-[#2E5A88] font-medium' : 'text-gray-500'}`}>
                 {item.label}
               </span>
