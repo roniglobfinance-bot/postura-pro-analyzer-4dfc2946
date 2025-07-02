@@ -9,16 +9,280 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      evaluations: {
+        Row: {
+          adams_test: string | null
+          age: number | null
+          beighton_test: string | null
+          cobb_angle: number | null
+          complaints: string | null
+          cranio_cervical_angle: number | null
+          created_at: string | null
+          height: number | null
+          id: string
+          lumbar_lordosis: number | null
+          ober_test: string | null
+          observations: string | null
+          pelvic_imbalance: number | null
+          pelvic_tilt: number | null
+          scapular_abduction: string | null
+          scapular_elevation: string | null
+          shoulder_imbalance: number | null
+          squat_pattern: string | null
+          status: string | null
+          student_id: string | null
+          teacher_id: string | null
+          thomas_test: string | null
+          thoracic_kyphosis: number | null
+          title: string
+          updated_at: string | null
+          walking_pattern: string | null
+          weight: number | null
+        }
+        Insert: {
+          adams_test?: string | null
+          age?: number | null
+          beighton_test?: string | null
+          cobb_angle?: number | null
+          complaints?: string | null
+          cranio_cervical_angle?: number | null
+          created_at?: string | null
+          height?: number | null
+          id?: string
+          lumbar_lordosis?: number | null
+          ober_test?: string | null
+          observations?: string | null
+          pelvic_imbalance?: number | null
+          pelvic_tilt?: number | null
+          scapular_abduction?: string | null
+          scapular_elevation?: string | null
+          shoulder_imbalance?: number | null
+          squat_pattern?: string | null
+          status?: string | null
+          student_id?: string | null
+          teacher_id?: string | null
+          thomas_test?: string | null
+          thoracic_kyphosis?: number | null
+          title: string
+          updated_at?: string | null
+          walking_pattern?: string | null
+          weight?: number | null
+        }
+        Update: {
+          adams_test?: string | null
+          age?: number | null
+          beighton_test?: string | null
+          cobb_angle?: number | null
+          complaints?: string | null
+          cranio_cervical_angle?: number | null
+          created_at?: string | null
+          height?: number | null
+          id?: string
+          lumbar_lordosis?: number | null
+          ober_test?: string | null
+          observations?: string | null
+          pelvic_imbalance?: number | null
+          pelvic_tilt?: number | null
+          scapular_abduction?: string | null
+          scapular_elevation?: string | null
+          shoulder_imbalance?: number | null
+          squat_pattern?: string | null
+          status?: string | null
+          student_id?: string | null
+          teacher_id?: string | null
+          thomas_test?: string | null
+          thoracic_kyphosis?: number | null
+          title?: string
+          updated_at?: string | null
+          walking_pattern?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluations_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercicios: {
+        Row: {
+          created_at: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+        }
+        Relationships: []
+      }
+      photos: {
+        Row: {
+          ai_analysis: Json | null
+          created_at: string | null
+          evaluation_id: string | null
+          id: string
+          image_url: string
+          is_validated: boolean | null
+          measurements: Json | null
+          view_type: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          created_at?: string | null
+          evaluation_id?: string | null
+          id?: string
+          image_url: string
+          is_validated?: boolean | null
+          measurements?: Json | null
+          view_type: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          created_at?: string | null
+          evaluation_id?: string | null
+          id?: string
+          image_url?: string
+          is_validated?: boolean | null
+          measurements?: Json | null
+          view_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photos_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string | null
+          evaluation_id: string | null
+          id: string
+          is_shared: boolean | null
+          pdf_url: string | null
+          share_token: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          evaluation_id?: string | null
+          id?: string
+          is_shared?: boolean | null
+          pdf_url?: string | null
+          share_token?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          evaluation_id?: string | null
+          id?: string
+          is_shared?: boolean | null
+          pdf_url?: string | null
+          share_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      students: {
+        Row: {
+          created_at: string | null
+          id: string
+          student_id: string | null
+          teacher_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          student_id?: string | null
+          teacher_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          student_id?: string | null
+          teacher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "students_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { user_id: string }
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role: "teacher" | "student"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +397,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      user_role: ["teacher", "student"],
+    },
   },
 } as const

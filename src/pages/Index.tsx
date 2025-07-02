@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import BottomNavigation from '@/components/BottomNavigation';
@@ -13,6 +14,7 @@ import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 
 const Index = () => {
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false);
 
@@ -104,7 +106,7 @@ const Index = () => {
       <div className="flex">
         {/* Desktop Navigation */}
         <div className="hidden md:block">
-          <Navigation currentView={currentView} onViewChange={setCurrentView} />
+          <Navigation activeSection={currentView} onSectionChange={setCurrentView} />
         </div>
         
         {/* Main Content */}
