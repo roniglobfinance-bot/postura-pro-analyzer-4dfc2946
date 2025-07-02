@@ -22,7 +22,7 @@ export const useAuth = () => {
   return context;
 };
 
-export const useAuthState = () => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ export const useAuthState = () => {
     await supabase.auth.signOut();
   };
 
-  return {
+  const value = {
     user,
     session,
     loading,
@@ -92,4 +92,10 @@ export const useAuthState = () => {
     signUp,
     signOut
   };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
