@@ -2,128 +2,320 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Info, Brain, FileText } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { ClientData, PosturalAssessmentData } from '../PosturalAssessment';
 
-interface DiagnosisProps {
-  assessmentData: any;
-  onGeneratePrescription: () => void;
+interface AutomaticDiagnosisProps {
+  clientData: ClientData;
+  posturalData: PosturalAssessmentData;
+  onGenerateReport: () => void;
 }
 
-const AutomaticDiagnosis = ({ assessmentData, onGeneratePrescription }: DiagnosisProps) => {
-  // Cálculo do Score SAARS
-  const calculateSAARSScore = () => {
-    let score = 100; // Começa com score perfeito
-    
-    // Deduções por alterações angulares
-    const cranioCervical = assessmentData.cranioCervicalAngle || 55;
-    if (cranioCervical < 45 || cranioCervical > 65) score -= 10;
-    if (cranioCervical < 40 || cranioCervical > 70) score -= 5;
-    
-    const thoracicKyphosis = assessmentData.thoracicKyphosis || 30;
-    if (thoracicKyphosis < 15 || thoracicKyphosis > 45) score -= 15;
-    if (thoracicKyphosis < 10 || thoracicKyphosis > 50) score -= 10;
-    
-    const lumbarLordosis = assessmentData.lumbarLordosis || 50;
-    if (lumbarLordosis < 35 || lumbarLordosis > 65) score -= 15;
-    if (lumbarLordosis < 30 || lumbarLordosis > 70) score -= 10;
-    
-    const pelvicTilt = assessmentData.pelvicTilt || 12;
-    if (pelvicTilt < 5 || pelvicTilt > 18) score -= 10;
-    if (pelvicTilt < 0 || pelvicTilt > 25) score -= 5;
-    
-    // Deduções por assimetrias
-    const shoulderImbalance = Math.abs(assessmentData.shoulderImbalance || 0);
-    if (shoulderImbalance > 5) score -= 5;
-    if (shoulderImbalance > 10) score -= 5;
-    if (shoulderImbalance > 15) score -= 5;
-    
-    const cobbAngle = assessmentData.cobbAngle || 0;
-    if (cobbAngle > 5) score -= 10;
-    if (cobbAngle > 15) score -= 10;
-    if (cobbAngle > 25) score -= 15;
-    
-    // Deduções por testes funcionais positivos
-    if (assessmentData.thomasTest === 'positive-mild') score -= 5;
-    if (assessmentData.thomasTest === 'positive-severe') score -= 10;
-    if (assessmentData.oberTest === 'positive-mild') score -= 5;
-    if (assessmentData.oberTest === 'positive-severe') score -= 10;
-    if (assessmentData.adamsTest === 'positive-mild') score -= 5;
-    if (assessmentData.adamsTest === 'positive-severe') score -= 10;
-    
-    return Math.max(0, score);
-  };
-
-  const getSeverityLevel = (score: number) => {
-    if (score >= 85) return { level: 'Normal', color: 'bg-green-100 text-green-800', icon: CheckCircle };
-    if (score >= 70) return { level: 'Leve', color: 'bg-yellow-100 text-yellow-800', icon: Info };
-    if (score >= 50) return { level: 'Moderado', color: 'bg-orange-100 text-orange-800', icon: AlertTriangle };
-    return { level: 'Grave', color: 'bg-red-100 text-red-800', icon: XCircle };
-  };
-
-  const generateDiagnosis = () => {
-    const findings = [];
+const AutomaticDiagnosis = ({ clientData, posturalData, onGenerateReport }: AutomaticDiagnosisProps) => {
+  // Sistema de análise automática completo
+  const analyzePosturalPatterns = () => {
+    const identifiedPatterns = [];
     const recommendations = [];
-    
-    // Análise de cada parâmetro
-    const cranioCervical = assessmentData.cranioCervicalAngle || 55;
-    if (cranioCervical > 60) {
-      findings.push('Protrusão anterior de cabeça detectada');
-      recommendations.push('Fortalecimento dos flexores profundos do pescoço');
-      recommendations.push('Alongamento dos músculos suboccipitais');
+    let totalScore = 100;
+
+    // P01 - Hipercifose Torácica
+    if (posturalData.thoracicKyphosis >= 2) {
+      identifiedPatterns.push({
+        code: 'P01',
+        name: 'Correção de Hipercifose Torácica',
+        cause: 'Fraqueza dos extensores torácicos + postura sentada prolongada',
+        symptoms: ['Dor interescapular', 'Respiração curta', 'Ombros curvados para frente'],
+        severity: posturalData.thoracicKyphosis,
+        keyExercises: [
+          'Liberação peitoral com rolo (2x/dia, 1 minuto)',
+          'Extensão torácica sobre foam roller (3x10 reps)',
+          'Superman hold progressivo (15s → 45s)'
+        ],
+        duration: '8 semanas',
+        reminders: ['A cada 1h sentado, faça 2 minutos de correção postural']
+      });
+      totalScore -= 15;
+      recommendations.push('Protocolo P01 - Correção de Hipercifose Torácica');
     }
-    
-    const thoracicKyphosis = assessmentData.thoracicKyphosis || 30;
-    if (thoracicKyphosis > 40) {
-      findings.push('Hipercifose torácica identificada');
-      recommendations.push('Exercícios de extensão torácica');
-      recommendations.push('Fortalecimento dos romboides e trapézio médio');
+
+    // P02 - Alinhamento de Cabeça Anterior
+    if (posturalData.headForward >= 2) {
+      identifiedPatterns.push({
+        code: 'P02',
+        name: 'Alinhamento de Cabeça Anterior',
+        cause: 'Uso excessivo de dispositivos móveis',
+        symptoms: ['Dor na nuca', 'Cefaleia tensional'],
+        severity: posturalData.headForward,
+        keyExercises: [
+          'Chin tuck contra resistência manual (3x12 reps)',
+          'Flexão cervical isométrica (4x20s)'
+        ],
+        duration: '6 semanas',
+        reminders: ['Ajuste a tela na altura dos olhos']
+      });
+      totalScore -= 12;
+      recommendations.push('Protocolo P02 - Alinhamento de Cabeça Anterior');
     }
-    
-    const lumbarLordosis = assessmentData.lumbarLordosis || 50;
-    if (lumbarLordosis > 60) {
-      findings.push('Hiperlordose lombar presente');
-      recommendations.push('Fortalecimento do core');
-      recommendations.push('Alongamento dos flexores do quadril');
-    } else if (lumbarLordosis < 40) {
-      findings.push('Retificação da lordose lombar');
-      recommendations.push('Mobilização da coluna lombar');
-      recommendations.push('Fortalecimento dos extensores lombares');
+
+    // P03 - Escápulas Aladas
+    if (posturalData.scapularWinging >= 2) {
+      identifiedPatterns.push({
+        code: 'P03',
+        name: 'Escápulas Aladas',
+        cause: 'Fraqueza do serrátil anterior',
+        symptoms: ['Asas salientes nas costas'],
+        severity: posturalData.scapularWinging,
+        keyExercises: [
+          'Push-up plus modificado (3x8 reps)',
+          'Protração escapular com banda'
+        ],
+        duration: '10 semanas',
+        reminders: ['Fortaleça serrátil anterior diariamente']
+      });
+      totalScore -= 10;
+      recommendations.push('Protocolo P03 - Escápulas Aladas');
     }
-    
-    const cobbAngle = assessmentData.cobbAngle || 0;
-    if (cobbAngle > 10) {
-      findings.push(`Escoliose estrutural detectada (${cobbAngle}°)`);
-      recommendations.push('Exercícios assimétricos específicos');
-      recommendations.push('Alongamento da concavidade');
+
+    // P04 - Hiperlordose Lombar
+    if (posturalData.lumbarLordosis >= 2) {
+      identifiedPatterns.push({
+        code: 'P04',
+        name: 'Hiperlordose Lombar',
+        cause: 'Encurtamento do iliopsoas',
+        symptoms: ['Dor lombar em pé'],
+        severity: posturalData.lumbarLordosis,
+        keyExercises: [
+          'Alongamento do iliopsoas (3x30s/lado)',
+          'Deadbug (3x10)'
+        ],
+        duration: '8 semanas',
+        reminders: ['Evite sapatos de salto alto']
+      });
+      totalScore -= 12;
+      recommendations.push('Protocolo P04 - Hiperlordose Lombar');
     }
-    
-    // Análise de testes funcionais
-    if (assessmentData.thomasTest === 'positive-severe') {
-      findings.push('Encurtamento severo dos flexores do quadril');
-      recommendations.push('Alongamento intensivo do iliopsoas');
+
+    // P05 - Pélvis Anteriorizada
+    if (posturalData.pelvicAnteversion >= 2) {
+      identifiedPatterns.push({
+        code: 'P05',
+        name: 'Pélvis Anteriorizada',
+        cause: 'Desequilíbrio flexores/glúteos',
+        symptoms: ['Dores ao acordar'],
+        severity: posturalData.pelvicAnteversion,
+        keyExercises: [
+          'Alongamento de quadríceps (2x15/lado)',
+          'Good morning com bastão (3x8)'
+        ],
+        duration: '12 semanas',
+        reminders: ['Fortaleça glúteos regularmente']
+      });
+      totalScore -= 10;
+      recommendations.push('Protocolo P05 - Pélvis Anteriorizada');
     }
-    
-    if (assessmentData.oberTest === 'positive-severe') {
-      findings.push('Síndrome da banda iliotibial presente');
-      recommendations.push('Liberação miofascial da banda iliotibial');
+
+    // P06 - Assimetria de Ombros
+    if (posturalData.shouldersProtracted >= 2) {
+      identifiedPatterns.push({
+        code: 'P06',
+        name: 'Assimetria de Ombros',
+        cause: 'Padrões assimétricos',
+        symptoms: ['Ombro mais alto'],
+        severity: posturalData.shouldersProtracted,
+        keyExercises: [
+          'Elevação escapular unilateral (3x12)',
+          'Remada unilateral (3x10)'
+        ],
+        duration: '8 semanas',
+        reminders: ['Evite carregar peso em um lado só']
+      });
+      totalScore -= 8;
+      recommendations.push('Protocolo P06 - Assimetria de Ombros');
     }
-    
-    return { findings, recommendations };
+
+    // P08 - Joelho Valgo Estático
+    if (posturalData.kneeValgusVarus >= 2) {
+      identifiedPatterns.push({
+        code: 'P08',
+        name: 'Joelho Valgo Estático',
+        cause: 'Fraqueza do glúteo médio',
+        symptoms: ['Joelhos colados'],
+        severity: posturalData.kneeValgusVarus,
+        keyExercises: [
+          'Clamshell (3x15/lado)',
+          'Agachamento com banda'
+        ],
+        duration: '8 semanas',
+        reminders: ['Fortaleça glúteo médio diariamente']
+      });
+      totalScore -= 10;
+      recommendations.push('Protocolo P08 - Joelho Valgo Estático');
+    }
+
+    // P09 - Pé Plano Estrutural
+    if (posturalData.flatFeet >= 2) {
+      identifiedPatterns.push({
+        code: 'P09',
+        name: 'Pé Plano Estrutural',
+        cause: 'Arco colapsado',
+        symptoms: ['Dor no arco plantar'],
+        severity: posturalData.flatFeet,
+        keyExercises: [
+          'Elevação de calcanhar (3x15)',
+          'Coleta de toalha com os pés'
+        ],
+        duration: '12 semanas',
+        reminders: ['Use palmilhas com suporte de arco']
+      });
+      totalScore -= 8;
+      recommendations.push('Protocolo P09 - Pé Plano Estrutural');
+    }
+
+    // Análise baseada em testes funcionais
+    if (posturalData.adamsTest === 'positive') {
+      identifiedPatterns.push({
+        code: 'P13',
+        name: 'Escoliose Torácica',
+        cause: 'Assimetria estrutural/funcional',
+        symptoms: ['Ombro e quadril assimétricos', 'Giba costal'],
+        severity: 2,
+        keyExercises: [
+          'Respiração costal diferencial',
+          'Correção ativa no espelho',
+          'Alongamento específico da concavidade'
+        ],
+        duration: '12 semanas',
+        reminders: ['Monitore progressão regularmente']
+      });
+      totalScore -= 15;
+      recommendations.push('Protocolo P13 - Escoliose Torácica (Adams positivo)');
+    }
+
+    if (posturalData.anteriorFlexion === 'limited') {
+      identifiedPatterns.push({
+        code: 'P14',
+        name: 'Pélvis Retroversa',
+        cause: 'Encurtamento isquiotibiais',
+        symptoms: ['Achatamento lombar', 'Rigidez posterior'],
+        severity: 2,
+        keyExercises: [
+          'Alongamento de isquiotibiais (3x30s)',
+          'Inclinação pélvica ativa'
+        ],
+        duration: '8 semanas',
+        reminders: ['Alongue diariamente cadeia posterior']
+      });
+      totalScore -= 10;
+      recommendations.push('Protocolo P14 - Encurtamento Posterior');
+    }
+
+    if (posturalData.singleLegStance === 'poor') {
+      identifiedPatterns.push({
+        code: 'P27',
+        name: 'Instabilidade Postural',
+        cause: 'Déficit proprioceptivo',
+        symptoms: ['Desequilíbrio frequente', 'Instabilidade'],
+        severity: 2,
+        keyExercises: [
+          'Treino de apoio monopodal',
+          'Exercícios proprioceptivos',
+          'Olhos fechados em superfície instável'
+        ],
+        duration: '8 semanas',
+        reminders: ['Pratique equilíbrio diariamente']
+      });
+      totalScore -= 12;
+      recommendations.push('Protocolo P27 - Treino Proprioceptivo');
+    }
+
+    if (posturalData.squatPattern === 'compensated') {
+      identifiedPatterns.push({
+        code: 'P15',
+        name: 'Valgo Dinâmico',
+        cause: 'Padrão de movimento errado',
+        symptoms: ['Joelhos para dentro ao agachar'],
+        severity: 2,
+        keyExercises: [
+          'Agachamento com feedback visual',
+          'Step-up lateral',
+          'Fortalecimento glúteo médio'
+        ],
+        duration: '10 semanas',
+        reminders: ['Monitore padrão durante exercícios']
+      });
+      totalScore -= 10;
+      recommendations.push('Protocolo P15 - Correção Valgo Dinâmico');
+    }
+
+    // Análise baseada em dados do cliente
+    if (clientData.dailyHoursSitting > 6) {
+      identifiedPatterns.push({
+        code: 'P20',
+        name: 'Síndrome Cruzada Superior',
+        cause: 'Desequilíbrio muscular por postura sentada',
+        symptoms: ['Dor cervicotorácica', 'Fadiga postural'],
+        severity: 2,
+        keyExercises: [
+          'Alongamento peitoral',
+          'Fortalecimento cervical profundo',
+          'Mobilização torácica'
+        ],
+        duration: '10 semanas',
+        reminders: ['Pause a cada hora para movimentar-se']
+      });
+      totalScore -= 12;
+      recommendations.push('Protocolo P20 - Síndrome Cruzada Superior');
+    }
+
+    if (clientData.painIntensity >= 7) {
+      identifiedPatterns.push({
+        code: 'P32',
+        name: 'Síndrome do Piriforme',
+        cause: 'Compressão ciática',
+        symptoms: ['Dor glútea profunda', 'Irradiação ciática'],
+        severity: 3,
+        keyExercises: [
+          'Alongamento PIR do piriforme',
+          'Mobilização neural',
+          'Liberação miofascial'
+        ],
+        duration: '8 semanas',
+        reminders: ['Evite sentar por períodos prolongados']
+      });
+      totalScore -= 15;
+      recommendations.push('Protocolo Urgente P32 - Síndrome do Piriforme');
+    }
+
+    return {
+      patterns: identifiedPatterns,
+      recommendations,
+      totalScore: Math.max(0, totalScore),
+      riskLevel: identifiedPatterns.length
+    };
   };
 
-  const saarsScore = calculateSAARSScore();
-  const severity = getSeverityLevel(saarsScore);
-  const diagnosis = generateDiagnosis();
+  const getSeverityColor = (score: number) => {
+    if (score >= 85) return { color: 'bg-green-100 text-green-800', icon: CheckCircle, level: 'Normal' };
+    if (score >= 70) return { color: 'bg-yellow-100 text-yellow-800', icon: Info, level: 'Leve' };
+    if (score >= 50) return { color: 'bg-orange-100 text-orange-800', icon: AlertTriangle, level: 'Moderado' };
+    return { color: 'bg-red-100 text-red-800', icon: XCircle, level: 'Grave' };
+  };
+
+  const analysis = analyzePosturalPatterns();
+  const severity = getSeverityColor(analysis.totalScore);
   const SeverityIcon = severity.icon;
 
   return (
     <div className="space-y-6">
-      {/* Score SAARS */}
+      {/* Análise Automática Principal */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Diagnóstico Automático SAARS</span>
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-blue-600" />
+              <span>Diagnóstico Automático SAARS</span>
+            </div>
             <Badge className={severity.color} variant="secondary">
               <SeverityIcon className="h-4 w-4 mr-1" />
               {severity.level}
@@ -132,87 +324,149 @@ const AutomaticDiagnosis = ({ assessmentData, onGeneratePrescription }: Diagnosi
         </CardHeader>
         <CardContent>
           <div className="text-center mb-6">
-            <div className="text-4xl font-bold text-gray-900 mb-2">{saarsScore}</div>
+            <div className="text-4xl font-bold text-gray-900 mb-2">{analysis.totalScore}</div>
             <p className="text-gray-600">Score SAARS (0-100)</p>
+            <p className="text-sm text-gray-500">{analysis.patterns.length} padrões identificados</p>
           </div>
           
           <div className="bg-gray-200 rounded-full h-3 mb-4">
             <div 
               className={`h-3 rounded-full transition-all duration-500 ${
-                saarsScore >= 85 ? 'bg-green-500' :
-                saarsScore >= 70 ? 'bg-yellow-500' :
-                saarsScore >= 50 ? 'bg-orange-500' : 'bg-red-500'
+                analysis.totalScore >= 85 ? 'bg-green-500' :
+                analysis.totalScore >= 70 ? 'bg-yellow-500' :
+                analysis.totalScore >= 50 ? 'bg-orange-500' : 'bg-red-500'
               }`}
-              style={{ width: `${saarsScore}%` }}
+              style={{ width: `${analysis.totalScore}%` }}
             />
-          </div>
-          
-          <div className="grid grid-cols-4 gap-2 text-xs text-center">
-            <div className="text-red-600">Grave<br/>(0-49)</div>
-            <div className="text-orange-600">Moderado<br/>(50-69)</div>
-            <div className="text-yellow-600">Leve<br/>(70-84)</div>
-            <div className="text-green-600">Normal<br/>(85-100)</div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Principais Achados */}
+      {/* Padrões Identificados */}
       <Card>
         <CardHeader>
-          <CardTitle>Principais Achados Clínicos</CardTitle>
+          <CardTitle>Padrões Posturais Identificados</CardTitle>
         </CardHeader>
         <CardContent>
-          {diagnosis.findings.length > 0 ? (
-            <div className="space-y-2">
-              {diagnosis.findings.map((finding, index) => (
-                <div key={index} className="flex items-center p-3 bg-orange-50 rounded-lg">
-                  <AlertTriangle className="h-4 w-4 text-orange-600 mr-2 flex-shrink-0" />
-                  <span className="text-sm">{finding}</span>
+          {analysis.patterns.length > 0 ? (
+            <div className="space-y-4">
+              {analysis.patterns.map((pattern, index) => (
+                <div key={pattern.code} className="border rounded-lg p-4 bg-orange-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        {pattern.code} - {pattern.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <strong>Causa:</strong> {pattern.cause}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="outline">{pattern.duration}</Badge>
+                      <div className="flex">
+                        {[...Array(pattern.severity)].map((_, i) => (
+                          <div key={i} className="w-2 h-2 bg-red-500 rounded-full mr-1" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Sintomas:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {pattern.symptoms.map((symptom, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {symptom}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Exercícios-Chave:</p>
+                    <ul className="space-y-1">
+                      {pattern.keyExercises.map((exercise, idx) => (
+                        <li key={idx} className="text-sm text-gray-700 flex items-start">
+                          <span className="text-blue-600 mr-2">•</span>
+                          {exercise}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div className="border-t pt-2">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Lembretes:</p>
+                    {pattern.reminders.map((reminder, idx) => (
+                      <p key={idx} className="text-sm text-orange-700">
+                        ⚠️ {reminder}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex items-center p-3 bg-green-50 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-              <span className="text-sm">Nenhuma alteração postural significativa detectada</span>
+            <div className="text-center py-8">
+              <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                Excelente! Postura Dentro dos Parâmetros Normais
+              </h3>
+              <p className="text-gray-500">
+                Nenhum padrão postural patológico foi identificado na análise.
+              </p>
+              <p className="text-sm text-gray-400 mt-2">
+                Recomenda-se manutenção com exercícios preventivos.
+              </p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Prescrição Automática */}
+      {/* Relatório Detalhado */}
       <Card>
         <CardHeader>
-          <CardTitle>Prescrição de Exercícios Automatizada</CardTitle>
+          <CardTitle>Relatório Completo</CardTitle>
         </CardHeader>
         <CardContent>
-          {diagnosis.recommendations.length > 0 ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                {diagnosis.recommendations.map((recommendation, index) => (
-                  <div key={index} className="flex items-center p-3 bg-blue-50 rounded-lg">
-                    <Info className="h-4 w-4 text-blue-600 mr-2 flex-shrink-0" />
-                    <span className="text-sm">{recommendation}</span>
-                  </div>
-                ))}
+          <div className="space-y-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-2">Resumo da Análise</h4>
+              <ul className="space-y-1 text-sm text-blue-800">
+                <li>• Cliente: {clientData.fullName || 'Não informado'}</li>
+                <li>• Idade: {clientData.age || 'Não informado'} anos</li>
+                <li>• Nível de atividade: {clientData.activityLevel}</li>
+                <li>• Horas sentado/dia: {clientData.dailyHoursSitting}h</li>
+                <li>• Intensidade da dor: {clientData.painIntensity}/10</li>
+                <li>• Padrões identificados: {analysis.patterns.length}</li>
+                <li>• Score SAARS: {analysis.totalScore}/100</li>
+              </ul>
+            </div>
+            
+            {analysis.recommendations.length > 0 && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-green-900 mb-2">Recomendações Prioritárias</h4>
+                <ul className="space-y-1">
+                  {analysis.recommendations.map((rec, index) => (
+                    <li key={index} className="text-sm text-green-800 flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      {rec}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              
-              <Separator />
-              
-              <Button 
-                onClick={onGeneratePrescription}
-                className="w-full bg-green-600 hover:bg-green-700"
-              >
-                Gerar Protocolo de Exercícios Detalhado
-              </Button>
-            </div>
-          ) : (
-            <div className="text-center py-6">
-              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
-              <p className="text-gray-600">Postura dentro dos parâmetros normais</p>
-              <p className="text-sm text-gray-500">Manutenção dos exercícios preventivos recomendada</p>
-            </div>
-          )}
+            )}
+            
+            <Separator />
+            
+            <Button 
+              onClick={onGenerateReport}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              size="lg"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Gerar Relatório Completo PDF
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
