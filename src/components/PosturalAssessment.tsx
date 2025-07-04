@@ -1,130 +1,302 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import PosturalAnalysisSection from './assessment/PosturalAnalysisSection';
-import AutomaticDiagnosis from './assessment/AutomaticDiagnosis';
-import ClientDataSection from './assessment/ClientDataSection';
-import FunctionalTestsSection from './assessment/FunctionalTestsSection';
-import AssessmentHeader from './assessment/AssessmentHeader';
-import ObservationsSection from './assessment/ObservationsSection';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import ComprehensiveClientData from './assessment/ComprehensiveClientData';
+import PosturalEvaluation from './assessment/PosturalEvaluation';
+import TreatmentProtocols from './assessment/TreatmentProtocols';
+import AssessmentResults from './assessment/AssessmentResults';
+
+export interface ClientData {
+  // Dados pessoais
+  fullName: string;
+  age: number;
+  gender: 'male' | 'female' | 'other';
+  height: number;
+  weight: number;
+  profession: string;
+  dailyHoursSitting: number;
+  dailyHoursStanding: number;
+  
+  // Histórico médico
+  knownInjuries: string;
+  previousSurgeries: string;
+  chronicDiseases: string;
+  currentMedications: string;
+  allergies: string;
+  
+  // Hábitos e estilo de vida
+  activityLevel: 'sedentary' | 'moderate' | 'active' | 'athlete';
+  sportsActivity: string;
+  sportsFrequency: string;
+  sleepHours: number;
+  sleepQuality: 'poor' | 'regular' | 'good' | 'excellent';
+  diet: 'balanced' | 'vegetarian' | 'processed' | 'other';
+  smoking: boolean;
+  alcohol: 'none' | 'social' | 'regular' | 'frequent';
+  
+  // Queixas principais
+  painLocation: string;
+  painIntensity: number;
+  painFrequency: string;
+  jointStiffness: string;
+  posturalFatigue: string;
+  functionalDifficulties: string;
+  
+  // Objetivos
+  primaryGoal: string;
+  secondaryGoal: string;
+}
+
+export interface PosturalAssessmentData {
+  // Postura estática
+  headForward: number;
+  shouldersProtracted: number;
+  scapularWinging: number;
+  thoracicKyphosis: number;
+  lumbarLordosis: number;
+  pelvicAnteversion: number;
+  kneeValgusVarus: number;
+  flatFeet: number;
+  
+  // Testes funcionais
+  adamsTest: 'negative' | 'positive';
+  anteriorFlexion: 'normal' | 'limited';
+  singleLegStance: 'good' | 'poor';
+  squatPattern: 'normal' | 'compensated';
+  
+  // Observações
+  observations: string;
+}
 
 const PosturalAssessment = () => {
-  const [assessmentData, setAssessmentData] = useState({
-    // Dados básicos
-    clientName: '',
-    age: '',
-    height: '',
-    weight: '',
-    date: new Date().toISOString().split('T')[0],
-    
-    // Medições angulares - Vista Sagital
-    cranioCervicalAngle: 55,
-    thoracicKyphosis: 30,
-    lumbarLordosis: 50,
-    pelvicTilt: 12,
-    
-    // Assimetrias - Vista Frontal
-    shoulderImbalance: 0,
-    cobbAngle: 0,
-    pelvicImbalance: 0,
-    
-    // Vista Posterior
-    scapularAbduction: 'normal',
-    scapularElevation: 'symmetric',
-    
-    // Testes funcionais específicos
-    thomasTest: 'negative',
-    oberTest: 'negative',
-    adamsTest: 'negative',
-    beightonTest: 'negative',
-    
-    // Avaliação dinâmica
-    squatPattern: 'normal',
-    walkingPattern: 'normal',
-    
-    // Observações
-    observations: '',
-    complaints: ''
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('client-data');
+  const [clientData, setClientData] = useState<ClientData>({
+    fullName: '',
+    age: 0,
+    gender: 'other',
+    height: 0,
+    weight: 0,
+    profession: '',
+    dailyHoursSitting: 0,
+    dailyHoursStanding: 0,
+    knownInjuries: '',
+    previousSurgeries: '',
+    chronicDiseases: '',
+    currentMedications: '',
+    allergies: '',
+    activityLevel: 'sedentary',
+    sportsActivity: '',
+    sportsFrequency: '',
+    sleepHours: 8,
+    sleepQuality: 'good',
+    diet: 'balanced',
+    smoking: false,
+    alcohol: 'none',
+    painLocation: '',
+    painIntensity: 0,
+    painFrequency: '',
+    jointStiffness: '',
+    posturalFatigue: '',
+    functionalDifficulties: '',
+    primaryGoal: '',
+    secondaryGoal: ''
   });
 
-  const handleDataChange = (field: string, value: any) => {
-    setAssessmentData(prev => ({
+  const [posturalData, setPosturalData] = useState<PosturalAssessmentData>({
+    headForward: 0,
+    shouldersProtracted: 0,
+    scapularWinging: 0,
+    thoracicKyphosis: 0,
+    lumbarLordosis: 0,
+    pelvicAnteversion: 0,
+    kneeValgusVarus: 0,
+    flatFeet: 0,
+    adamsTest: 'negative',
+    anteriorFlexion: 'normal',
+    singleLegStance: 'good',
+    squatPattern: 'normal',
+    observations: ''
+  });
+
+  const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Carregar dados salvos
+  useEffect(() => {
+    const loadSavedData = () => {
+      try {
+        const savedClientData = localStorage.getItem('clientData');
+        const savedPosturalData = localStorage.getItem('posturalData');
+        
+        if (savedClientData) {
+          setClientData(JSON.parse(savedClientData));
+        }
+        
+        if (savedPosturalData) {
+          setPosturalData(JSON.parse(savedPosturalData));
+        }
+      } catch (error) {
+        console.error('Erro ao carregar dados salvos:', error);
+      }
+    };
+
+    loadSavedData();
+  }, []);
+
+  // Auto-salvar dados
+  useEffect(() => {
+    try {
+      localStorage.setItem('clientData', JSON.stringify(clientData));
+    } catch (error) {
+      console.error('Erro ao salvar dados do cliente:', error);
+    }
+  }, [clientData]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('posturalData', JSON.stringify(posturalData));
+    } catch (error) {
+      console.error('Erro ao salvar dados posturais:', error);
+    }
+  }, [posturalData]);
+
+  const handleSaveAssessment = async () => {
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Usuário não autenticado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('evaluations')
+        .insert({
+          student_id: user.id,
+          teacher_id: user.user_metadata?.role === 'teacher' ? user.id : null,
+          title: `Avaliação - ${clientData.fullName}`,
+          age: clientData.age,
+          height: clientData.height,
+          weight: clientData.weight,
+          cranio_cervical_angle: posturalData.headForward,
+          thoracic_kyphosis: posturalData.thoracicKyphosis,
+          lumbar_lordosis: posturalData.lumbarLordosis,
+          pelvic_tilt: posturalData.pelvicAnteversion,
+          shoulder_imbalance: posturalData.shouldersProtracted,
+          adams_test: posturalData.adamsTest,
+          squat_pattern: posturalData.squatPattern,
+          observations: posturalData.observations,
+          complaints: `${clientData.painLocation} - Intensidade: ${clientData.painIntensity}`,
+          status: 'completed'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso!",
+        description: "Avaliação salva com sucesso no banco de dados.",
+      });
+
+      // Limpar dados locais após salvar
+      localStorage.removeItem('clientData');
+      localStorage.removeItem('posturalData');
+      
+    } catch (error) {
+      console.error('Erro ao salvar avaliação:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar avaliação. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClientDataChange = (field: keyof ClientData, value: any) => {
+    setClientData(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const handleSaveAssessment = () => {
-    console.log('Salvando avaliação:', assessmentData);
-    toast({
-      title: "Avaliação Salva!",
-      description: "A avaliação postural SAARS foi salva com sucesso.",
-    });
-  };
-
-  const handleGenerateReport = () => {
-    toast({
-      title: "Relatório Gerado!",
-      description: "O relatório com diagnóstico e prescrições foi gerado.",
-    });
-  };
-
-  const handleGeneratePrescription = () => {
-    toast({
-      title: "Protocolo Gerado!",
-      description: "Protocolo de exercícios personalizado foi criado com base na avaliação.",
-    });
+  const handlePosturalDataChange = (field: keyof PosturalAssessmentData, value: any) => {
+    setPosturalData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   return (
-    <div className="space-y-6">
-      <AssessmentHeader 
-        onSave={handleSaveAssessment}
-        onGenerateReport={handleGenerateReport}
-      />
+    <div className="space-y-6 pb-20 md:pb-8">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Avaliação Postural Completa</h1>
+            <p className="text-gray-600">Sistema SAARS - Avaliação Abrangente</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveAssessment}
+              disabled={isSaving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {isSaving ? 'Salvando...' : 'Salvar Avaliação'}
+            </button>
+          </div>
+        </div>
 
-      <Tabs defaultValue="client-data" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="client-data">Dados do Cliente</TabsTrigger>
-          <TabsTrigger value="postural-analysis">Análise Postural</TabsTrigger>
-          <TabsTrigger value="functional-tests">Testes Funcionais</TabsTrigger>
-          <TabsTrigger value="diagnosis">Diagnóstico</TabsTrigger>
-        </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="client-data">Dados do Cliente</TabsTrigger>
+            <TabsTrigger value="postural-eval">Avaliação Postural</TabsTrigger>
+            <TabsTrigger value="protocols">Protocolos</TabsTrigger>
+            <TabsTrigger value="results">Resultados</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="client-data" className="space-y-4">
-          <ClientDataSection 
-            data={assessmentData}
-            onChange={handleDataChange}
-          />
-        </TabsContent>
+          <TabsContent value="client-data" className="space-y-4">
+            <ComprehensiveClientData 
+              data={clientData}
+              onChange={handleClientDataChange}
+              onNext={() => setActiveTab('postural-eval')}
+            />
+          </TabsContent>
 
-        <TabsContent value="postural-analysis" className="space-y-4">
-          <PosturalAnalysisSection 
-            data={assessmentData} 
-            onChange={handleDataChange}
-          />
-        </TabsContent>
+          <TabsContent value="postural-eval" className="space-y-4">
+            <PosturalEvaluation 
+              data={posturalData}
+              onChange={handlePosturalDataChange}
+              onNext={() => setActiveTab('protocols')}
+            />
+          </TabsContent>
 
-        <TabsContent value="functional-tests" className="space-y-4">
-          <FunctionalTestsSection
-            data={assessmentData}
-            onChange={handleDataChange}
-          />
-        </TabsContent>
+          <TabsContent value="protocols" className="space-y-4">
+            <TreatmentProtocols 
+              clientData={clientData}
+              posturalData={posturalData}
+              selectedProtocol={selectedProtocol}
+              onProtocolSelect={setSelectedProtocol}
+              onNext={() => setActiveTab('results')}
+            />
+          </TabsContent>
 
-        <TabsContent value="diagnosis" className="space-y-4">
-          <AutomaticDiagnosis 
-            assessmentData={assessmentData}
-            onGeneratePrescription={handleGeneratePrescription}
-          />
-        </TabsContent>
-      </Tabs>
-
-      <ObservationsSection
-        observations={assessmentData.observations}
-        onChange={(value) => handleDataChange('observations', value)}
-      />
+          <TabsContent value="results" className="space-y-4">
+            <AssessmentResults 
+              clientData={clientData}
+              posturalData={posturalData}
+              selectedProtocol={selectedProtocol}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };
