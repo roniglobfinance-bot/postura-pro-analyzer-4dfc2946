@@ -29,6 +29,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Get initial session first
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+      
+      // Initial redirect based on current location and auth state
+      const currentPath = window.location.pathname;
+      if (session?.user && currentPath === '/auth') {
+        navigate('/', { replace: true });
+      } else if (!session?.user && currentPath !== '/auth') {
+        navigate('/auth', { replace: true });
+      }
+    });
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -36,21 +51,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Redirect logic
-        if (session?.user) {
-          navigate('/');
+        // Only redirect on specific auth events to avoid loops
+        if (event === 'SIGNED_IN' && session?.user) {
+          navigate('/', { replace: true });
         } else if (event === 'SIGNED_OUT') {
-          navigate('/auth');
+          navigate('/auth', { replace: true });
         }
       }
     );
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
 
     return () => subscription.unsubscribe();
   }, [navigate]);

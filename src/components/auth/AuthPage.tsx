@@ -25,9 +25,21 @@ const AuthPage = () => {
     
     try {
       const { error } = await signIn(email, password);
-      if (error) setError(error.message);
-    } catch (err) {
-      setError('Erro ao fazer login. Tente novamente.');
+      if (error) {
+        // Handle specific error messages
+        if (error.message.includes('captcha')) {
+          setError('Erro de verificação. Tente novamente em alguns minutos.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          setError('Email ou senha incorretos.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Por favor, confirme seu email antes de fazer login.');
+        } else {
+          setError(error.message);
+        }
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError('Erro ao fazer login. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -40,9 +52,25 @@ const AuthPage = () => {
     
     try {
       const { error } = await signUp(email, password, fullName, role);
-      if (error) setError(error.message);
-    } catch (err) {
-      setError('Erro ao criar conta. Tente novamente.');
+      if (error) {
+        // Handle specific error messages
+        if (error.message.includes('captcha')) {
+          setError('Erro de verificação. Tente novamente em alguns minutos.');
+        } else if (error.message.includes('User already registered')) {
+          setError('Este email já está registrado. Tente fazer login.');
+        } else if (error.message.includes('Password should be at least')) {
+          setError('A senha deve ter pelo menos 6 caracteres.');
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setError('');
+        // Show success message for email confirmation
+        alert('Conta criada! Verifique seu email para confirmar o cadastro.');
+      }
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      setError('Erro ao criar conta. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
