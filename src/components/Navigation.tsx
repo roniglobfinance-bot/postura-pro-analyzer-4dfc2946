@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -24,13 +25,27 @@ interface NavigationProps {
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const { user, signOut } = useAuth();
   const [userProfile, setUserProfile] = useState({
-    name: user?.user_metadata?.full_name || user?.email || 'Usuário',
-    role: user?.user_metadata?.role || 'student',
-    avatar: user?.user_metadata?.avatar_url
+    name: 'Usuário',
+    role: 'student' as 'teacher' | 'student',
+    avatar: undefined as string | undefined
   });
 
+  useEffect(() => {
+    if (user) {
+      setUserProfile({
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
+        role: user.user_metadata?.role || 'student',
+        avatar: user.user_metadata?.avatar_url
+      });
+    }
+  }, [user]);
+
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const menuItems = [
@@ -46,6 +61,10 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'settings', label: 'Configurações', icon: Settings }
   ];
 
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
   return (
     <nav className="w-64 bg-white border-r border-gray-200 min-h-screen p-4">
       <Card className="mb-4">
@@ -54,7 +73,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
             <Avatar>
               <AvatarImage src={userProfile.avatar} />
               <AvatarFallback>
-                {userProfile.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                {getInitials(userProfile.name)}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">

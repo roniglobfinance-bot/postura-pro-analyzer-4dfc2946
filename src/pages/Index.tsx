@@ -14,64 +14,87 @@ import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 
 const Index = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false);
 
+  console.log('Index - user:', user?.email, 'session:', !!session, 'currentView:', currentView);
+
   // Verificar se há uma avaliação completa no localStorage
   useEffect(() => {
-    const assessment = localStorage.getItem('posturalAssessment');
-    if (assessment) {
-      const data = JSON.parse(assessment);
-      // Verificar se os campos básicos estão preenchidos
-      if (data.clientName && data.age && data.height && data.weight) {
-        setHasCompletedAssessment(true);
+    try {
+      const assessment = localStorage.getItem('posturalAssessment');
+      if (assessment) {
+        const data = JSON.parse(assessment);
+        // Verificar se os campos básicos estão preenchidos
+        if (data.clientName && data.age && data.height && data.weight) {
+          setHasCompletedAssessment(true);
+        }
       }
+    } catch (error) {
+      console.error('Error checking assessment:', error);
     }
   }, [currentView]);
 
   // Redirecionamento condicional pós-cadastro
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirect = urlParams.get('redirect');
-    
-    if (redirect === 'assessment') {
-      setCurrentView('assessment');
-    } else if (!hasCompletedAssessment && currentView === 'dashboard') {
-      // Se não tem avaliação e está no dashboard, mostrar prompt
-      setCurrentView('assessment-prompt');
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect = urlParams.get('redirect');
+      
+      if (redirect === 'assessment') {
+        setCurrentView('assessment');
+      }
+    } catch (error) {
+      console.error('Error checking URL params:', error);
     }
-  }, [hasCompletedAssessment]);
+  }, []);
 
   const renderCurrentView = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
-      case 'clients':
-        return <ClientManagement />;
-      case 'assessment':
-        return <PosturalAssessment />;
-      case 'photo-docs':
-        return <PhotoDocumentation />;
-      case 'progress':
-        return <ProgressReports />;
-      case 'workouts':
-        return <WorkoutPlans />;
-      case 'pricing':
-        return <PricingPlans />;
-      case 'profile':
-        return <UserProfile />;
-      case 'assessment-prompt':
-        return renderAssessmentPrompt();
-      case 'settings':
-        return (
-          <div className="p-8 text-center pb-20 md:pb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Configurações</h2>
-            <p className="text-gray-600">Esta seção está em desenvolvimento.</p>
-          </div>
-        );
-      default:
-        return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
+    try {
+      switch (currentView) {
+        case 'dashboard':
+          return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
+        case 'clients':
+          return <ClientManagement />;
+        case 'assessment':
+          return <PosturalAssessment />;
+        case 'photo-docs':
+          return <PhotoDocumentation />;
+        case 'progress':
+          return <ProgressReports />;
+        case 'workouts':
+          return <WorkoutPlans />;
+        case 'pricing':
+          return <PricingPlans />;
+        case 'profile':
+          return <UserProfile />;
+        case 'assessment-prompt':
+          return renderAssessmentPrompt();
+        case 'settings':
+          return (
+            <div className="p-8 text-center pb-20 md:pb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Configurações</h2>
+              <p className="text-gray-600">Esta seção está em desenvolvimento.</p>
+            </div>
+          );
+        default:
+          return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
+      }
+    } catch (error) {
+      console.error('Error rendering view:', error);
+      return (
+        <div className="p-8 text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Erro</h2>
+          <p className="text-gray-600">Ocorreu um erro ao carregar esta seção.</p>
+          <button 
+            onClick={() => setCurrentView('dashboard')}
+            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Voltar ao Dashboard
+          </button>
+        </div>
+      );
     }
   };
 
@@ -99,6 +122,17 @@ const Index = () => {
       </div>
     </div>
   );
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

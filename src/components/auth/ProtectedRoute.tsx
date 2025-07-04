@@ -1,5 +1,7 @@
+
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -7,6 +9,11 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    console.log('ProtectedRoute - user:', user?.email, 'loading:', loading, 'path:', location.pathname);
+  }, [user, loading, location.pathname]);
 
   if (loading) {
     return (
@@ -20,6 +27,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   if (!user) {
+    console.log('No user found, redirecting to auth');
     return <Navigate to="/auth" replace />;
   }
 
