@@ -1,16 +1,14 @@
-
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
 import ComprehensiveClientData from './assessment/ComprehensiveClientData';
 import PosturalEvaluation from './assessment/PosturalEvaluation';
 import TreatmentProtocols from './assessment/TreatmentProtocols';
 import AssessmentResults from './assessment/AssessmentResults';
+import PosturalMeasurements from './assessment/PosturalMeasurements';
+import DiagnosticAI from './assessment/DiagnosticAI';
 
 export interface ClientData {
-  // Dados pessoais
   fullName: string;
   age: number;
   gender: 'male' | 'female' | 'other';
@@ -19,15 +17,11 @@ export interface ClientData {
   profession: string;
   dailyHoursSitting: number;
   dailyHoursStanding: number;
-  
-  // Histórico médico
   knownInjuries: string;
   previousSurgeries: string;
   chronicDiseases: string;
   currentMedications: string;
   allergies: string;
-  
-  // Hábitos e estilo de vida
   activityLevel: 'sedentary' | 'moderate' | 'active' | 'athlete';
   sportsActivity: string;
   sportsFrequency: string;
@@ -36,22 +30,17 @@ export interface ClientData {
   diet: 'balanced' | 'vegetarian' | 'processed' | 'other';
   smoking: boolean;
   alcohol: 'none' | 'social' | 'regular' | 'frequent';
-  
-  // Queixas principais
   painLocation: string;
   painIntensity: number;
   painFrequency: string;
   jointStiffness: string;
   posturalFatigue: string;
   functionalDifficulties: string;
-  
-  // Objetivos
   primaryGoal: string;
   secondaryGoal: string;
 }
 
 export interface PosturalAssessmentData {
-  // Postura estática
   headForward: number;
   shouldersProtracted: number;
   scapularWinging: number;
@@ -60,19 +49,14 @@ export interface PosturalAssessmentData {
   pelvicAnteversion: number;
   kneeValgusVarus: number;
   flatFeet: number;
-  
-  // Testes funcionais
   adamsTest: 'negative' | 'positive';
   anteriorFlexion: 'normal' | 'limited';
   singleLegStance: 'good' | 'poor';
   squatPattern: 'normal' | 'compensated';
-  
-  // Observações
   observations: string;
 }
 
 const PosturalAssessment = () => {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('client-data');
   const [clientData, setClientData] = useState<ClientData>({
     fullName: '',
@@ -122,6 +106,8 @@ const PosturalAssessment = () => {
     observations: ''
   });
 
+  const [measurements, setMeasurements] = useState({});
+  const [diagnosis, setDiagnosis] = useState(null);
   const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -165,49 +151,25 @@ const PosturalAssessment = () => {
   }, [posturalData]);
 
   const handleSaveAssessment = async () => {
-    if (!user) {
-      toast({
-        title: "Erro",
-        description: "Usuário não autenticado",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsSaving(true);
     
     try {
-      const { error } = await supabase
-        .from('evaluations')
-        .insert({
-          student_id: user.id,
-          teacher_id: user.user_metadata?.role === 'teacher' ? user.id : null,
-          title: `Avaliação - ${clientData.fullName}`,
-          age: clientData.age,
-          height: clientData.height,
-          weight: clientData.weight,
-          cranio_cervical_angle: posturalData.headForward,
-          thoracic_kyphosis: posturalData.thoracicKyphosis,
-          lumbar_lordosis: posturalData.lumbarLordosis,
-          pelvic_tilt: posturalData.pelvicAnteversion,
-          shoulder_imbalance: posturalData.shouldersProtracted,
-          adams_test: posturalData.adamsTest,
-          squat_pattern: posturalData.squatPattern,
-          observations: posturalData.observations,
-          complaints: `${clientData.painLocation} - Intensidade: ${clientData.painIntensity}`,
-          status: 'completed'
-        });
-
-      if (error) throw error;
-
+      // Salvar no localStorage para persistência sem autenticação
+      const assessmentData = {
+        clientData,
+        posturalData,
+        measurements,
+        diagnosis,
+        selectedProtocol,
+        date: new Date().toISOString()
+      };
+      
+      localStorage.setItem('completeAssessment', JSON.stringify(assessmentData));
+      
       toast({
         title: "Sucesso!",
-        description: "Avaliação salva com sucesso no banco de dados.",
+        description: "Avaliação salva com sucesso.",
       });
-
-      // Limpar dados locais após salvar
-      localStorage.removeItem('clientData');
-      localStorage.removeItem('posturalData');
       
     } catch (error) {
       console.error('Erro ao salvar avaliação:', error);
@@ -241,7 +203,7 @@ const PosturalAssessment = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Avaliação Postural Completa</h1>
-            <p className="text-gray-600">Sistema SAARS - Avaliação Abrangente</p>
+            <p className="text-gray-600">Sistema SAARS - Avaliação Abrangente com IA</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -255,9 +217,11 @@ const PosturalAssessment = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="client-data">Dados do Cliente</TabsTrigger>
-            <TabsTrigger value="postural-eval">Avaliação Postural</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="client-data">Dados</TabsTrigger>
+            <TabsTrigger value="postural-eval">Avaliação</TabsTrigger>
+            <TabsTrigger value="measurements">Medições</TabsTrigger>
+            <TabsTrigger value="diagnosis">Diagnóstico</TabsTrigger>
             <TabsTrigger value="protocols">Protocolos</TabsTrigger>
             <TabsTrigger value="results">Resultados</TabsTrigger>
           </TabsList>
@@ -274,7 +238,23 @@ const PosturalAssessment = () => {
             <PosturalEvaluation 
               data={posturalData}
               onChange={handlePosturalDataChange}
-              onNext={() => setActiveTab('protocols')}
+              onNext={() => setActiveTab('measurements')}
+            />
+          </TabsContent>
+
+          <TabsContent value="measurements" className="space-y-4">
+            <PosturalMeasurements 
+              clientData={clientData}
+              measurements={measurements}
+              onMeasurementsChange={setMeasurements}
+            />
+          </TabsContent>
+
+          <TabsContent value="diagnosis" className="space-y-4">
+            <DiagnosticAI 
+              clientData={clientData}
+              measurements={measurements}
+              onDiagnosisComplete={setDiagnosis}
             />
           </TabsContent>
 
