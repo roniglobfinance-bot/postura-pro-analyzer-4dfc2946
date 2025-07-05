@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import BottomNavigation from '@/components/BottomNavigation';
@@ -14,11 +13,10 @@ import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 
 const Index = () => {
-  const { user, session } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false);
 
-  console.log('Index - user:', user?.email, 'session:', !!session, 'currentView:', currentView);
+  console.log('Index - currentView:', currentView);
 
   // Verificar se há uma avaliação completa no localStorage
   useEffect(() => {
@@ -122,17 +120,6 @@ const Index = () => {
       </div>
     </div>
   );
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
