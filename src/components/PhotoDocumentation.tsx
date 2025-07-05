@@ -12,12 +12,16 @@ import PhotoUpload from './PhotoUpload';
 import MeasurementTools from './MeasurementTools';
 import PhotoReports from './PhotoReports';
 import PosturalAnalysis from './PosturalAnalysis';
+import AdvancedMeasurements from './assessment/AdvancedMeasurements';
+import SagittalFrontalAnalysis from './assessment/SagittalFrontalAnalysis';
+import VisualCaptureGuides from './assessment/VisualCaptureGuides';
 
 interface PhotoData {
   id: string;
   view: 'anterior' | 'posterior' | 'lateral-direita' | 'lateral-esquerda';
   imageUrl: string;
   measurements: any[];
+  advancedMeasurements?: any;
   clientHeight: number;
   date: string;
 }
@@ -32,6 +36,7 @@ const PhotoDocumentation = () => {
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoData | null>(null);
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [activeTab, setActiveTab] = useState('photos');
+  const [combinedMeasurements, setCombinedMeasurements] = useState<any>({});
 
   const handlePhotoUpload = (imageUrl: string, view: string) => {
     const newPhoto: PhotoData = {
@@ -55,6 +60,10 @@ const PhotoDocumentation = () => {
     });
   };
 
+  const handlePhotoCapture = (imageUrl: string) => {
+    handlePhotoUpload(imageUrl, activeView);
+  };
+
   const handleSaveMeasurements = (measurements: any[]) => {
     if (!selectedPhoto) return;
     
@@ -67,6 +76,41 @@ const PhotoDocumentation = () => {
     
     toast({
       title: "Medições salvas!",
+      description: "As medições foram salvas com sucesso.",
+    });
+  };
+
+  const handleAdvancedMeasurementsChange = (measurements: any) => {
+    if (!selectedPhoto) return;
+    
+    const updatedPhoto = { ...selectedPhoto, advancedMeasurements: measurements };
+    setPhotos(prev => prev.map(p => p.id === selectedPhoto.id ? updatedPhoto : p));
+    setSelectedPhoto(updatedPhoto);
+    
+    // Combinar todas as medições para análise
+    const allMeasurements = {
+      angular: [],
+      linear: []
+    };
+    
+    photos.forEach(photo => {
+      if (photo.advancedMeasurements) {
+        if (photo.advancedMeasurements.angular) {
+          allMeasurements.angular.push(...photo.advancedMeasurements.angular);
+        }
+        if (photo.advancedMeasurements.linear) {
+          allMeasurements.linear.push(...photo.advancedMeasurements.linear);
+        }
+      }
+    });
+    
+    setCombinedMeasurements(allMeasurements);
+    
+    // Salvar no localStorage
+    localStorage.setItem('posturalPhotos', JSON.stringify(photos.map(p => p.id === selectedPhoto.id ? updatedPhoto : p)));
+    
+    toast({
+      title: "Medições avançadas salvas!",
       description: "As medições foram salvas com sucesso.",
     });
   };
@@ -104,12 +148,32 @@ const PhotoDocumentation = () => {
     const savedClientData = localStorage.getItem('clientData');
     
     if (savedPhotos) {
-      setPhotos(JSON.parse(savedPhotos));
+      const loadedPhotos = JSON.parse(savedPhotos);
+      setPhotos(loadedPhotos);
+      
+      // Combinar medições existentes
+      const allMeasurements = {
+        angular: [],
+        linear: []
+      };
+      
+      loadedPhotos.forEach((photo: PhotoData) => {
+        if (photo.advancedMeasurements) {
+          if (photo.advancedMeasurements.angular) {
+            allMeasurements.angular.push(...photo.advancedMeasurements.angular);
+          }
+          if (photo.advancedMeasurements.linear) {
+            allMeasurements.linear.push(...photo.advancedMeasurements.linear);
+          }
+        }
+      });
+      
+      setCombinedMeasurements(allMeasurements);
     }
     
     if (savedClientData) {
       const data = JSON.parse(savedClientData);
-      setClientName(data.name || '');
+      setClientName(data.fullName || data.name || '');
       setClientAge(data.age || 25);
       setClientHeight(data.height || 170);
       setClientWeight(data.weight || 70);
@@ -132,7 +196,7 @@ const PhotoDocumentation = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Documentação Fotográfica</h2>
-          <p className="text-gray-600">Análise postural com medições por linhas de referência</p>
+          <p className="text-gray-600">Análise postural com medições avançadas e guias visuais</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={handleGenerateReport} className="bg-blue-600 hover:bg-blue-700">
@@ -216,9 +280,10 @@ const PhotoDocumentation = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="photos">Captura de Fotos</TabsTrigger>
-          <TabsTrigger value="analysis">Análise IA</TabsTrigger>
+          <TabsTrigger value="measurements">Medições Avançadas</TabsTrigger>
+          <TabsTrigger value="analysis">Análise Planos</TabsTrigger>
           <TabsTrigger value="reports">Relatórios</TabsTrigger>
         </TabsList>
 
@@ -249,15 +314,29 @@ const PhotoDocumentation = () => {
                       </div>
                     </CardTitle>
                     <CardDescription>
-                      {getCurrentPhoto() ? 'Foto carregada - Use as ferramentas para fazer medições' : 'Faça upload de uma foto para esta vista'}
+                      {getCurrentPhoto() ? 'Foto carregada - Use as ferramentas para fazer medições' : 'Capture ou faça upload de uma foto para esta vista'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {!getCurrentPhoto() ? (
-                      <PhotoUpload
-                        onPhotoUpload={(imageUrl) => handlePhotoUpload(imageUrl, view)}
-                        view={view}
-                      />
+                      <div className="space-y-4">
+                        <VisualCaptureGuides 
+                          onPhotoCapture={handlePhotoCapture}
+                          currentView={view}
+                        />
+                        <div className="relative">
+                          <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                          </div>
+                          <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">ou</span>
+                          </div>
+                        </div>
+                        <PhotoUpload
+                          onPhotoUpload={(imageUrl) => handlePhotoUpload(imageUrl, view)}
+                          view={view}
+                        />
+                      </div>
                     ) : (
                       <div className="space-y-4">
                         <PhotoCanvas
@@ -283,9 +362,38 @@ const PhotoDocumentation = () => {
           </Tabs>
         </TabsContent>
 
+        <TabsContent value="measurements" className="space-y-4">
+          {selectedPhoto || photos.length > 0 ? (
+            <AdvancedMeasurements
+              imageUrl={selectedPhoto?.imageUrl || photos[0]?.imageUrl || ''}
+              clientHeight={clientHeight}
+              onMeasurementsChange={handleAdvancedMeasurementsChange}
+              existingMeasurements={selectedPhoto?.advancedMeasurements}
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Ruler className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                  Nenhuma foto disponível
+                </h3>
+                <p className="text-gray-500">
+                  Capture algumas fotos posturais para realizar medições avançadas.
+                </p>
+                <Button 
+                  onClick={() => setActiveTab('photos')} 
+                  className="mt-4 bg-blue-600 hover:bg-blue-700"
+                >
+                  Iniciar Captura
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="analysis" className="space-y-4">
-          <PosturalAnalysis
-            photos={photos}
+          <SagittalFrontalAnalysis
+            measurements={combinedMeasurements}
             clientData={{
               name: clientName,
               age: clientAge,
