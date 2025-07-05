@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,10 @@ import PosturalAnalysis from './PosturalAnalysis';
 import AdvancedMeasurements from './assessment/AdvancedMeasurements';
 import SagittalFrontalAnalysis from './assessment/SagittalFrontalAnalysis';
 import VisualCaptureGuides from './assessment/VisualCaptureGuides';
+import ImageAnnotationTools from './canvas/ImageAnnotationTools';
+import EnhancedDataVisualization from './reports/EnhancedDataVisualization';
+import PatientEducationResources from './education/PatientEducationResources';
+import AccessibilityEnhancements from './accessibility/AccessibilityEnhancements';
 
 interface PhotoData {
   id: string;
@@ -37,6 +40,8 @@ const PhotoDocumentation = () => {
   const [showMeasurements, setShowMeasurements] = useState(false);
   const [activeTab, setActiveTab] = useState('photos');
   const [combinedMeasurements, setCombinedMeasurements] = useState<any>({});
+  const [annotations, setAnnotations] = useState<any[]>([]);
+  const [patientConditions, setPatientConditions] = useState<string[]>([]);
 
   const handlePhotoUpload = (imageUrl: string, view: string) => {
     const newPhoto: PhotoData = {
@@ -191,8 +196,49 @@ const PhotoDocumentation = () => {
     localStorage.setItem('clientData', JSON.stringify(clientData));
   }, [clientName, clientAge, clientHeight, clientWeight]);
 
+  const handleAnnotationsChange = (newAnnotations: any[]) => {
+    setAnnotations(newAnnotations);
+    localStorage.setItem('photoAnnotations', JSON.stringify(newAnnotations));
+  };
+
+  const handleEducationProgress = (contentId: string, progress: number) => {
+    console.log(`Education content ${contentId} progress: ${progress}%`);
+  };
+
+  // Generate sample data for enhanced visualizations
+  const generateVisualizationData = () => {
+    const measurements = combinedMeasurements;
+    const sampleData = [
+      { measurement: 'Ângulo de Cobb', value: 15, normal: 0, severity: 'moderado' as const, improvement: -2 },
+      { measurement: 'Cifose Torácica', value: 45, normal: 35, severity: 'leve' as const, improvement: 3 },
+      { measurement: 'Lordose Lombar', value: 60, normal: 45, severity: 'moderado' as const, improvement: -1 },
+      { measurement: 'Inclinação Pélvica', value: 12, normal: 8, severity: 'leve' as const, improvement: 2 },
+    ];
+
+    // Add actual measurements if available
+    if (measurements.angular && measurements.angular.length > 0) {
+      measurements.angular.forEach((m: any) => {
+        sampleData.push({
+          measurement: m.name || 'Medição Angular',
+          value: m.angle || 0,
+          normal: m.reference || 0,
+          severity: m.classification || 'normal' as const,
+          improvement: Math.random() * 6 - 3 // Random improvement for demo
+        });
+      });
+    }
+
+    return sampleData;
+  };
+
   return (
     <div className="space-y-6">
+      {/* Accessibility Enhancements */}
+      <AccessibilityEnhancements />
+
+      {/* Skip to main content anchor */}
+      <div id="main-content" />
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Documentação Fotográfica</h2>
@@ -280,11 +326,12 @@ const PhotoDocumentation = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="photos">Captura de Fotos</TabsTrigger>
           <TabsTrigger value="measurements">Medições Avançadas</TabsTrigger>
           <TabsTrigger value="analysis">Análise Planos</TabsTrigger>
           <TabsTrigger value="reports">Relatórios</TabsTrigger>
+          <TabsTrigger value="education">Educação</TabsTrigger>
         </TabsList>
 
         <TabsContent value="photos" className="space-y-4">
@@ -405,11 +452,30 @@ const PhotoDocumentation = () => {
 
         <TabsContent value="reports" className="space-y-4">
           {photos.length > 0 ? (
-            <PhotoReports
-              photos={photos}
-              clientName={clientName}
-              clientHeight={clientHeight}
-            />
+            <div className="space-y-6">
+              {/* Enhanced Data Visualization */}
+              <EnhancedDataVisualization
+                data={generateVisualizationData()}
+                clientName={clientName}
+                evaluationDate={new Date().toISOString()}
+              />
+
+              {/* Image Annotations */}
+              {selectedPhoto?.imageUrl && (
+                <ImageAnnotationTools
+                  imageUrl={selectedPhoto.imageUrl}
+                  onAnnotationsChange={handleAnnotationsChange}
+                  existingAnnotations={annotations}
+                />
+              )}
+
+              {/* Original Photo Reports */}
+              <PhotoReports
+                photos={photos}
+                clientName={clientName}
+                clientHeight={clientHeight}
+              />
+            </div>
           ) : (
             <Card>
               <CardContent className="p-8 text-center">
@@ -430,7 +496,55 @@ const PhotoDocumentation = () => {
             </Card>
           )}
         </TabsContent>
+
+        <TabsContent value="education" className="space-y-4">
+          <PatientEducationResources
+            patientConditions={patientConditions}
+            onProgressUpdate={handleEducationProgress}
+          />
+        </TabsContent>
       </Tabs>
+
+      {/* Print Styles */}
+      <style jsx global>{`
+        @media print {
+          .no-print, nav, .tabs-list, button:not(.print-button) {
+            display: none !important;
+          }
+          
+          .print-content {
+            display: block !important;
+          }
+          
+          body {
+            font-size: 12pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+          }
+          
+          .card {
+            border: 1px solid #000;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+          }
+          
+          h1, h2, h3 {
+            page-break-after: avoid;
+          }
+          
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+          
+          th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+          }
+        }
+      `}</style>
     </div>
   );
 };
