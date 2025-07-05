@@ -1,21 +1,19 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { 
   Camera, 
   FileText, 
   Users, 
-  Settings, 
-  LogOut,
+  Settings,
   User,
   BarChart3,
   BookOpen,
   Home
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 
 interface NavigationProps {
   activeSection: string;
@@ -23,30 +21,10 @@ interface NavigationProps {
 }
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
-  const { user, signOut } = useAuth();
-  const [userProfile, setUserProfile] = useState({
-    name: 'Usuário',
-    role: 'student' as 'teacher' | 'student',
-    avatar: undefined as string | undefined
+  const [userProfile] = useState({
+    name: 'Usuário PosturaPro',
+    role: 'teacher' as 'teacher' | 'student'
   });
-
-  useEffect(() => {
-    if (user) {
-      setUserProfile({
-        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
-        role: user.user_metadata?.role || 'student',
-        avatar: user.user_metadata?.avatar_url
-      });
-    }
-  }, [user]);
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -54,9 +32,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'assessment', label: 'Avaliação Postural', icon: FileText },
     { id: 'progress', label: 'Relatórios', icon: BarChart3 },
     { id: 'workouts', label: 'Exercícios', icon: BookOpen },
-    ...(userProfile.role === 'teacher' ? [
-      { id: 'clients', label: 'Gerenciar Alunos', icon: Users }
-    ] : []),
+    { id: 'clients', label: 'Gerenciar Alunos', icon: Users },
     { id: 'profile', label: 'Perfil', icon: User },
     { id: 'settings', label: 'Configurações', icon: Settings }
   ];
@@ -71,7 +47,6 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
         <CardHeader className="pb-4">
           <div className="flex items-center space-x-3">
             <Avatar>
-              <AvatarImage src={userProfile.avatar} />
               <AvatarFallback>
                 {getInitials(userProfile.name)}
               </AvatarFallback>
@@ -100,17 +75,6 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
             {item.label}
           </Button>
         ))}
-        
-        <div className="pt-4 border-t">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={handleSignOut}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Sair
-          </Button>
-        </div>
       </div>
     </nav>
   );

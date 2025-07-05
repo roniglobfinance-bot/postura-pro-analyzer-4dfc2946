@@ -1,27 +1,29 @@
 
-import { Activity, Menu, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Bell, Menu } from 'lucide-react';
 
 const Header = () => {
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
+    <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Activity className="h-8 w-8 text-blue-600" />
+          <Button variant="ghost" size="sm" className="md:hidden">
+            <Menu className="h-5 w-5" />
+          </Button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">SAARS</h1>
-            <p className="text-sm text-gray-600">Sistema de Avaliação e Análise Rigorosa da Postura</p>
+            <h1 className="text-2xl font-bold text-[#2E5A88]">PosturaPro</h1>
+            <p className="text-sm text-gray-600">Sistema de Análise Postural</p>
           </div>
         </div>
         
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm">
-            <User className="h-4 w-4 mr-2" />
-            Personal Trainer
-          </Button>
           <Button variant="ghost" size="sm">
-            <Menu className="h-4 w-4" />
+            <Bell className="h-5 w-5" />
           </Button>
+          <div className="text-right">
+            <p className="text-sm font-medium">Sistema Ativo</p>
+            <p className="text-xs text-gray-500">Versão 2.0</p>
+          </div>
         </div>
       </div>
     </header>
