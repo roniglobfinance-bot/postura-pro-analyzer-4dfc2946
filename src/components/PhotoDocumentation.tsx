@@ -506,7 +506,7 @@ const PhotoDocumentation = () => {
       </Tabs>
 
       {/* Print Styles */}
-      <style jsx global>{`
+      <style>{`
         @media print {
           .no-print, nav, .tabs-list, button:not(.print-button) {
             display: none !important;

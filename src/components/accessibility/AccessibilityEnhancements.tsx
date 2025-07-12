@@ -251,7 +251,7 @@ const AccessibilityEnhancements = () => {
       )}
 
       {/* Add CSS styles */}
-      <style jsx global>{`
+      <style>{`
         /* High Contrast Mode */
         .accessibility-high-contrast {
           filter: contrast(150%) brightness(110%);

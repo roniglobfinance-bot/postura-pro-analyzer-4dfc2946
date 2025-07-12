@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { toast } from '@/hooks/use-toast';
 
 // Image compression utility
@@ -59,8 +59,8 @@ export class ErrorBoundary extends React.Component<
     console.error('Error caught by boundary:', error, errorInfo);
     
     // Log error to monitoring service
-    if (window.gtag) {
-      window.gtag('event', 'exception', {
+    if ((window as any).gtag) {
+      (window as any).gtag('event', 'exception', {
         description: error.message,
         fatal: false
       });
@@ -147,8 +147,8 @@ export const useErrorHandler = () => {
     });
 
     // Log to monitoring service
-    if (window.gtag) {
-      window.gtag('event', 'exception', {
+    if ((window as any).gtag) {
+      (window as any).gtag('event', 'exception', {
         description: error.message,
         fatal: false
       });
@@ -172,8 +172,8 @@ export const usePerformanceMonitor = (componentName: string) => {
       }
       
       // Send to analytics
-      if (window.gtag) {
-        window.gtag('event', 'timing_complete', {
+      if ((window as any).gtag) {
+        (window as any).gtag('event', 'timing_complete', {
           name: componentName,
           value: Math.round(renderTime)
         });
