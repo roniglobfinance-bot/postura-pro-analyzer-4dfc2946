@@ -18,6 +18,8 @@ import ImageAnnotationTools from './canvas/ImageAnnotationTools';
 import EnhancedDataVisualization from './reports/EnhancedDataVisualization';
 import PatientEducationResources from './education/PatientEducationResources';
 import AccessibilityEnhancements from './accessibility/AccessibilityEnhancements';
+import AIBodyDetection from './AIBodyDetection';
+import { useAutoSave } from '@/hooks/useAutoSave';
 
 interface PhotoData {
   id: string;
@@ -42,6 +44,22 @@ const PhotoDocumentation = () => {
   const [combinedMeasurements, setCombinedMeasurements] = useState<any>({});
   const [annotations, setAnnotations] = useState<any[]>([]);
   const [patientConditions, setPatientConditions] = useState<string[]>([]);
+  
+  // Auto-save functionality
+  const autoSaveData = {
+    photos,
+    combinedMeasurements,
+    annotations,
+    patientConditions,
+    activeView,
+    selectedPhoto
+  };
+  
+  const { loadDraft, clearDraft } = useAutoSave({
+    key: `photo_documentation_${Date.now()}`,
+    data: autoSaveData,
+    enabled: photos.length > 0 || Object.keys(combinedMeasurements).length > 0
+  });
 
   const handlePhotoUpload = (imageUrl: string, view: string) => {
     const newPhoto: PhotoData = {
@@ -439,15 +457,33 @@ const PhotoDocumentation = () => {
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-4">
-          <SagittalFrontalAnalysis
-            measurements={combinedMeasurements}
-            clientData={{
-              name: clientName,
-              age: clientAge,
-              height: clientHeight,
-              weight: clientWeight
-            }}
-          />
+          <div className="space-y-6">
+            {/* AI Body Detection */}
+            {selectedPhoto?.imageUrl && (
+              <AIBodyDetection
+                imageUrl={selectedPhoto.imageUrl}
+                autoAnalyze={true}
+                onAnalysisComplete={(analysis) => {
+                  console.log('AI Analysis completed:', analysis);
+                  toast({
+                    title: "Análise de IA concluída",
+                    description: `Pontuação geral: ${analysis.overallScore.toFixed(1)}`,
+                  });
+                }}
+              />
+            )}
+            
+            {/* Sagittal and Frontal Plane Analysis */}
+            <SagittalFrontalAnalysis
+              measurements={combinedMeasurements}
+              clientData={{
+                name: clientName,
+                age: clientAge,
+                height: clientHeight,
+                weight: clientWeight
+              }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">

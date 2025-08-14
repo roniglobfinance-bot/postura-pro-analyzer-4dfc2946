@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      assessment_drafts: {
+        Row: {
+          created_at: string | null
+          draft_data: Json
+          evaluation_id: string | null
+          id: string
+          last_saved: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          draft_data?: Json
+          evaluation_id?: string | null
+          id?: string
+          last_saved?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          draft_data?: Json
+          evaluation_id?: string | null
+          id?: string
+          last_saved?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assessment_drafts_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: true
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evaluations: {
         Row: {
           adams_test: string | null
@@ -275,6 +310,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_feedback: {
+        Row: {
+          created_at: string | null
+          id: string
+          message: string
+          status: string | null
+          type: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message: string
+          status?: string | null
+          type: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message?: string
+          status?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
