@@ -7,6 +7,8 @@ import TreatmentProtocols from './assessment/TreatmentProtocols';
 import AssessmentResults from './assessment/AssessmentResults';
 import PosturalMeasurements from './assessment/PosturalMeasurements';
 import DiagnosticAI from './assessment/DiagnosticAI';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ClientData {
   fullName: string;

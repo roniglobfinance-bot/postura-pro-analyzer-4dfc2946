@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import BottomNavigation from '@/components/BottomNavigation';
-import Dashboard from '@/components/Dashboard';
+import RoleDashboard from '@/components/RoleDashboard';
 import ClientManagement from '@/components/ClientManagement';
 import PosturalAssessment from '@/components/PosturalAssessment';
 import PhotoDocumentation from '@/components/PhotoDocumentation';
@@ -11,12 +11,35 @@ import ProgressReports from '@/components/ProgressReports';
 import WorkoutPlans from '@/components/WorkoutPlans';
 import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
+  const { user } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false);
+  const [userRole, setUserRole] = useState<'teacher' | 'student'>('student');
 
   console.log('Index - currentView:', currentView);
+
+  // Get user role from profile
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          setUserRole(profile.role);
+        }
+      }
+    };
+
+    fetchUserRole();
+  }, [user]);
 
   // Verificar se há uma avaliação completa no localStorage
   useEffect(() => {
@@ -52,7 +75,7 @@ const Index = () => {
     try {
       switch (currentView) {
         case 'dashboard':
-          return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
+          return <RoleDashboard userRole={userRole} />;
         case 'clients':
           return <ClientManagement />;
         case 'assessment':
@@ -77,7 +100,7 @@ const Index = () => {
             </div>
           );
         default:
-          return hasCompletedAssessment ? <Dashboard /> : renderAssessmentPrompt();
+          return <RoleDashboard userRole={userRole} />;
       }
     } catch (error) {
       console.error('Error rendering view:', error);
