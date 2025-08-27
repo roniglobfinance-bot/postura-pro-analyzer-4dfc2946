@@ -33,8 +33,8 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'progress', label: 'Relatórios', icon: BarChart3 },
     { id: 'workouts', label: 'Exercícios', icon: BookOpen },
     { id: 'clients', label: 'Gerenciar Alunos', icon: Users },
-    { id: 'profile', label: 'Perfil', icon: User },
-    { id: 'settings', label: 'Configurações', icon: Settings }
+    { id: 'system-summary', label: 'Status do Sistema', icon: Settings },
+    { id: 'profile', label: 'Perfil', icon: User }
   ];
 
   const getInitials = (name: string) => {

@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,241 +6,346 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import AuthDebug from './AuthDebug';
 
 const AuthPage = () => {
+  // Estados do formulário
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<'teacher' | 'student'>('student');
+  
+  // Estados de UI
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
-  const { signIn, signUp, user } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState('login');
+  const [showDebug, setShowDebug] = useState(false);
+  
+  const { signIn, signUp, user, loading, initialized } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
+  // Redirecionamento se já autenticado
   useEffect(() => {
-    if (user) {
+    if (user && initialized) {
       navigate('/', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, initialized, navigate]);
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Função para limpar mensagens
+  const clearMessages = () => {
     setError('');
     setSuccess('');
-    setLoading(true);
-    
-    try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        console.error('Login error:', error);
-        // Handle specific error messages
-        if (error.message.includes('captcha')) {
-          setError('Erro de verificação. Tente novamente em alguns minutos ou entre em contato com o suporte.');
-        } else if (error.message.includes('Invalid login credentials')) {
-          setError('Email ou senha incorretos.');
-        } else if (error.message.includes('Email not confirmed')) {
-          setError('Por favor, confirme seu email antes de fazer login.');
-        } else if (error.message.includes('Too many requests')) {
-          setError('Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.');
-        } else {
-          setError(error.message || 'Erro ao fazer login. Tente novamente.');
-        }
-      }
-    } catch (err: any) {
-      console.error('Login exception:', err);
-      setError('Erro de conexão. Verifique sua internet e tente novamente.');
-    } finally {
-      setLoading(false);
-    }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  // Função para limpar formulário
+  const clearForm = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setRole('student');
+  };
+
+  // Handler de login
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
+    clearMessages();
     
-    if (!fullName.trim()) {
-      setError('Nome completo é obrigatório.');
-      setLoading(false);
+    if (!email || !password) {
+      setError('Por favor, preencha todos os campos.');
       return;
     }
     
-    try {
-      const { error } = await signUp(email, password, fullName, role);
-      if (error) {
-        console.error('Signup error:', error);
-        // Handle specific error messages
-        if (error.message.includes('captcha')) {
-          setError('Erro de verificação. Tente novamente em alguns minutos ou entre em contato com o suporte.');
-        } else if (error.message.includes('User already registered')) {
-          setError('Este email já está registrado. Tente fazer login.');
-        } else if (error.message.includes('Password should be at least')) {
-          setError('A senha deve ter pelo menos 6 caracteres.');
-        } else if (error.message.includes('Invalid email')) {
-          setError('Email inválido. Verifique o formato do email.');
-        } else {
-          setError(error.message || 'Erro ao criar conta. Tente novamente.');
-        }
-      } else {
-        setSuccess('Conta criada com sucesso! Verifique seu email para confirmar o cadastro.');
-        // Clear form
-        setEmail('');
-        setPassword('');
-        setFullName('');
-        setRole('student');
-      }
-    } catch (err: any) {
-      console.error('Signup exception:', err);
-      setError('Erro de conexão. Verifique sua internet e tente novamente.');
-    } finally {
-      setLoading(false);
+    const result = await signIn(email, password);
+    
+    if (!result.success) {
+      setError(result.error || 'Erro ao fazer login');
+    } else {
+      setSuccess('Login realizado com sucesso!');
+      // O redirecionamento será feito pelo useEffect
     }
   };
 
+  // Handler de registro
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+    
+    if (!email || !password || !fullName) {
+      setError('Por favor, preencha todos os campos.');
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    
+    const result = await signUp(email, password, fullName, role);
+    
+    if (!result.success) {
+      setError(result.error || 'Erro ao criar conta');
+    } else {
+      if (result.needsConfirmation) {
+        setSuccess('Conta criada! Verifique seu email para ativar a conta.');
+      } else {
+        setSuccess('Conta criada com sucesso!');
+        clearForm();
+      }
+    }
+  };
+
+  // Contas de demonstração
+  const handleDemoLogin = async (demoType: 'teacher' | 'student') => {
+    clearMessages();
+    
+    const demoCredentials = {
+      teacher: { email: 'professor@demo.com', password: 'demo123', name: 'Professor Demo' },
+      student: { email: 'aluno@demo.com', password: 'demo123', name: 'Aluno Demo' }
+    };
+    
+    const creds = demoCredentials[demoType];
+    
+    // Primeiro tenta fazer login
+    const loginResult = await signIn(creds.email, creds.password);
+    
+    if (!loginResult.success) {
+      // Se falhar, cria a conta demo
+      const signupResult = await signUp(creds.email, creds.password, creds.name, demoType);
+      
+      if (!signupResult.success) {
+        setError(`Erro ao criar conta demo: ${signupResult.error}`);
+      } else {
+        setSuccess(`Conta demo ${demoType} criada e logada com sucesso!`);
+      }
+    } else {
+      setSuccess(`Login demo ${demoType} realizado com sucesso!`);
+    }
+  };
+
+  // Não renderizar até estar inicializado
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Inicializando sistema...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900">PosturaPro</CardTitle>
-          <CardDescription>
-            Sistema de Análise Postural Inteligente
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="login" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="register">Criar Conta</TabsTrigger>
-            </TabsList>
+      <div className="w-full max-w-md space-y-4">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold text-gray-900">PosturaPro</CardTitle>
+            <CardDescription>
+              Sistema de Análise Postural Inteligente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Entrar</TabsTrigger>
+                <TabsTrigger value="register">Criar Conta</TabsTrigger>
+              </TabsList>
+              
+              {/* Tab de Login */}
+              <TabsContent value="login">
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="login-password">Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        disabled={loading}
+                        minLength={6}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Entrar
+                  </Button>
+                </form>
+                
+                {/* Botões Demo */}
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs text-center text-gray-500">Ou teste com contas demo:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDemoLogin('teacher')}
+                      disabled={loading}
+                    >
+                      Professor Demo
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDemoLogin('student')}
+                      disabled={loading}
+                    >
+                      Aluno Demo
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              {/* Tab de Registro */}
+              <TabsContent value="register">
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="register-name">Nome Completo</Label>
+                    <Input
+                      id="register-name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Seu nome completo"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-role">Tipo de Usuário</Label>
+                    <Select 
+                      value={role} 
+                      onValueChange={(value: 'teacher' | 'student') => setRole(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="register-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">Aluno</SelectItem>
+                        <SelectItem value="teacher">Professor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-email">Email</Label>
+                    <Input
+                      id="register-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-password">Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="register-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        disabled={loading}
+                        minLength={6}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500">Mínimo 6 caracteres</p>
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Criar Conta
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
             
-            <TabsContent value="login">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    disabled={loading}
-                    minLength={6}
-                  />
-                </div>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                {success && (
-                  <Alert className="border-green-200 bg-green-50">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">{success}</AlertDescription>
-                  </Alert>
-                )}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Entrar
-                </Button>
-              </form>
-            </TabsContent>
+            {/* Mensagens de erro e sucesso */}
+            {error && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             
-            <TabsContent value="register">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Nome Completo</Label>
-                  <Input
-                    id="fullName"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Seu nome completo"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Tipo de Usuário</Label>
-                  <Select 
-                    value={role} 
-                    onValueChange={(value: 'teacher' | 'student') => setRole(value)}
-                    disabled={loading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="student">Aluno</SelectItem>
-                      <SelectItem value="teacher">Professor</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="registerEmail">Email</Label>
-                  <Input
-                    id="registerEmail"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="registerPassword">Senha</Label>
-                  <Input
-                    id="registerPassword"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    disabled={loading}
-                    minLength={6}
-                  />
-                </div>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                {success && (
-                  <Alert className="border-green-200 bg-green-50">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">{success}</AlertDescription>
-                  </Alert>
-                )}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Criar Conta
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            {success && (
+              <Alert className="border-green-200 bg-green-50 mt-4">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">{success}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Botão de Debug (apenas em desenvolvimento) */}
+        <div className="text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-xs text-gray-500"
+          >
+            {showDebug ? 'Ocultar' : 'Mostrar'} Debug
+          </Button>
+        </div>
+        
+        {showDebug && <AuthDebug />}
+      </div>
     </div>
   );
 };
