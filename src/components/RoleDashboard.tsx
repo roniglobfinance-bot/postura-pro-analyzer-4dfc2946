@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   Users, 
   FileText, 
@@ -12,11 +14,21 @@ import {
   Eye,
   Edit,
   GraduationCap,
-  ChartBar
+  ChartBar,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useSupabaseFunctions } from '@/hooks/useSupabaseFunctions';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface RoleDashboardProps {
   userRole: 'teacher' | 'student';
@@ -24,11 +36,22 @@ interface RoleDashboardProps {
 
 const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   const { user } = useAuth();
+  const { 
+    loading, 
+    getTeacherStudents, 
+    getStudentEvaluations, 
+    addStudentToTeacher,
+    createEvaluation 
+  } = useSupabaseFunctions();
+  
   const [stats, setStats] = useState<any>({});
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [studentEmail, setStudentEmail] = useState('');
+  const [isCreateEvalOpen, setIsCreateEvalOpen] = useState(false);
+  const [evalTitle, setEvalTitle] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
   useEffect(() => {
     if (user) {
@@ -38,8 +61,6 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
 
   const loadDashboardData = async () => {
     try {
-      setLoading(true);
-
       if (userRole === 'teacher') {
         await loadTeacherData();
       } else {
@@ -47,40 +68,28 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
-      toast({
-        title: "Erro ao carregar dashboard",
-        description: "Não foi possível carregar os dados.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadTeacherData = async () => {
-    // Load teacher's students
-    const { data: studentsData } = await supabase
-      .from('students')
-      .select(`
-        *,
-        profiles!students_student_id_fkey(full_name, email)
-      `)
-      .eq('teacher_id', user?.id);
+    if (!user) return;
 
-    setStudents(studentsData || []);
+    // Load teacher's students using new function
+    const studentsData = await getTeacherStudents();
+    setStudents(studentsData);
 
-    // Load evaluations for teacher's students
+    // Load evaluations for teacher
     const { data: evaluationsData } = await supabase
       .from('evaluations')
       .select('*')
-      .eq('teacher_id', user?.id)
+      .eq('teacher_id', user.id)
       .order('created_at', { ascending: false })
       .limit(10);
 
     setEvaluations(evaluationsData || []);
 
     // Calculate stats
-    const totalStudents = studentsData?.length || 0;
+    const totalStudents = studentsData.length;
     const totalEvaluations = evaluationsData?.length || 0;
     const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
     const pendingEvaluations = totalEvaluations - completedEvaluations;
@@ -94,25 +103,45 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   };
 
   const loadStudentData = async () => {
-    // Load student's evaluations
-    const { data: evaluationsData } = await supabase
-      .from('evaluations')
-      .select('*')
-      .eq('student_id', user?.id)
-      .order('created_at', { ascending: false });
+    if (!user) return;
 
-    setEvaluations(evaluationsData || []);
+    // Load student's evaluations using new function
+    const evaluationsData = await getStudentEvaluations();
+    setEvaluations(evaluationsData);
 
     // Calculate stats
-    const totalEvaluations = evaluationsData?.length || 0;
-    const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
-    const lastEvaluation = evaluationsData?.[0];
+    const totalEvaluations = evaluationsData.length;
+    const completedEvaluations = evaluationsData.filter(e => e.status === 'completed').length;
+    const lastEvaluation = evaluationsData[0];
 
     setStats({
       totalEvaluations,
       completedEvaluations,
       lastEvaluation: lastEvaluation?.created_at || null
     });
+  };
+
+  const handleAddStudent = async () => {
+    if (!user || !studentEmail) return;
+
+    const result = await addStudentToTeacher(user.id, studentEmail);
+    if (result.success) {
+      setStudentEmail('');
+      setIsAddStudentOpen(false);
+      loadTeacherData(); // Reload data
+    }
+  };
+
+  const handleCreateEvaluation = async () => {
+    if (!evalTitle) return;
+
+    const result = await createEvaluation(evalTitle, selectedStudentId || undefined);
+    if (result.success) {
+      setEvalTitle('');
+      setSelectedStudentId('');
+      setIsCreateEvalOpen(false);
+      loadTeacherData(); // Reload data
+    }
   };
 
   if (loading) {
@@ -196,34 +225,74 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
           <TabsContent value="students" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Meus Alunos</h3>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Aluno
-              </Button>
+              <Dialog open={isAddStudentOpen} onOpenChange={setIsAddStudentOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Adicionar Aluno
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Adicionar Novo Aluno</DialogTitle>
+                    <DialogDescription>
+                      Digite o email do aluno que deseja adicionar.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="studentEmail">Email do Aluno</Label>
+                      <Input
+                        id="studentEmail"
+                        type="email"
+                        value={studentEmail}
+                        onChange={(e) => setStudentEmail(e.target.value)}
+                        placeholder="aluno@exemplo.com"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddStudentOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleAddStudent} disabled={loading || !studentEmail}>
+                      {loading ? 'Adicionando...' : 'Adicionar'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {students.map((student) => (
-                <Card key={student.id}>
+                <Card key={student.student_id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{student.profiles?.full_name}</h4>
+                      <h4 className="font-medium">{student.full_name}</h4>
                       <Badge variant="outline">
                         <GraduationCap className="h-3 w-3 mr-1" />
                         Aluno
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-3">{student.profiles?.email}</p>
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Avaliar
-                      </Button>
-                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">{student.email}</p>
+            <div className="flex space-x-2">
+              <Button size="sm" variant="outline">
+                <Eye className="h-3 w-3 mr-1" />
+                Ver
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  setSelectedStudentId(student.student_id);
+                  setEvalTitle(`Avaliação de ${student.full_name} - ${new Date().toLocaleDateString('pt-BR')}`);
+                  setIsCreateEvalOpen(true);
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Avaliar
+              </Button>
+            </div>
                   </CardContent>
                 </Card>
               ))}
@@ -233,10 +302,57 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
           <TabsContent value="evaluations" className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Avaliações Recentes</h3>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Avaliação
-              </Button>
+              <Dialog open={isCreateEvalOpen} onOpenChange={setIsCreateEvalOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova Avaliação
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Criar Nova Avaliação</DialogTitle>
+                    <DialogDescription>
+                      Crie uma nova avaliação postural para um aluno.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="evalTitle">Título da Avaliação</Label>
+                      <Input
+                        id="evalTitle"
+                        value={evalTitle}
+                        onChange={(e) => setEvalTitle(e.target.value)}
+                        placeholder="Ex: Avaliação Inicial - Janeiro 2024"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="studentSelect">Aluno (Opcional)</Label>
+                      <select
+                        id="studentSelect"
+                        value={selectedStudentId}
+                        onChange={(e) => setSelectedStudentId(e.target.value)}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Selecionar aluno...</option>
+                        {students.map((student) => (
+                          <option key={student.student_id} value={student.student_id}>
+                            {student.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsCreateEvalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleCreateEvaluation} disabled={loading || !evalTitle}>
+                      {loading ? 'Criando...' : 'Criar Avaliação'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             <div className="space-y-3">

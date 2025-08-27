@@ -11,6 +11,7 @@ import ProgressReports from '@/components/ProgressReports';
 import WorkoutPlans from '@/components/WorkoutPlans';
 import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
+import SystemSummary from '@/components/SystemSummary';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -90,6 +91,8 @@ const Index = () => {
           return <PricingPlans />;
         case 'profile':
           return <UserProfile />;
+        case 'system-summary':
+          return <SystemSummary />;
         case 'assessment-prompt':
           return renderAssessmentPrompt();
         case 'settings':

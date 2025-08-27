@@ -346,9 +346,98 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_student_to_teacher: {
+        Args: { student_email: string; teacher_id: string }
+        Returns: {
+          message: string
+          student_id: string
+          success: boolean
+        }[]
+      }
+      add_user_role: {
+        Args:
+          | {
+              additional_permissions?: string[]
+              new_role: string
+              target_user_id: string
+            }
+          | { new_role: string; target_user_id: string }
+        Returns: boolean
+      }
+      can_perform_action: {
+        Args: { required_role: string }
+        Returns: boolean
+      }
+      create_evaluation: {
+        Args: { p_student_id?: string; p_title: string }
+        Returns: {
+          evaluation_id: string
+          message: string
+          success: boolean
+        }[]
+      }
+      get_student_evaluations: {
+        Args: { student_id?: string }
+        Returns: {
+          created_at: string
+          id: string
+          status: string
+          teacher_email: string
+          teacher_name: string
+          title: string
+        }[]
+      }
+      get_teacher_students: {
+        Args: { teacher_id?: string }
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          student_id: string
+        }[]
+      }
+      get_user_profile: {
+        Args: { user_id?: string }
+        Returns: {
+          avatar_url: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }[]
+      }
       get_user_role: {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      is_student: {
+        Args: { user_id?: string }
+        Returns: boolean
+      }
+      is_teacher: {
+        Args: { user_id?: string }
+        Returns: boolean
+      }
+      is_user_role: {
+        Args: { check_role: string }
+        Returns: boolean
+      }
+      remove_user_role: {
+        Args: { role_to_remove: string; target_user_id: string }
+        Returns: boolean
+      }
+      update_evaluation_status: {
+        Args: { evaluation_id: string; new_status: string }
+        Returns: {
+          message: string
+          success: boolean
+        }[]
+      }
+      user_has_permission: {
+        Args: { check_permission: string }
+        Returns: boolean
       }
     }
     Enums: {
