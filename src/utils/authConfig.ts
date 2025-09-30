@@ -30,7 +30,8 @@ export const AUTH_CONFIG = {
     'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres',
     'Invalid email': 'Formato de email inválido',
     'Too many requests': 'Muitas tentativas. Aguarde alguns minutos',
-    'captcha': 'Erro de verificação. Tente novamente',
+    'captcha verification process failed': '⚠️ ERRO DE CONFIGURAÇÃO: CAPTCHA está habilitado no Supabase. Desabilite em: Auth > Providers > Bot Protection',
+    'captcha': 'Erro de verificação CAPTCHA. Desabilite o CAPTCHA no Supabase',
     'Network error': 'Erro de conexão. Verifique sua internet'
   }
 };
