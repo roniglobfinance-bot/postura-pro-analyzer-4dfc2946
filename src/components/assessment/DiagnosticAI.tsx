@@ -1,12 +1,11 @@
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Brain, AlertTriangle, CheckCircle, FileText, Lightbulb } from 'lucide-react';
+import { Brain, AlertTriangle, CheckCircle, Loader2, Save } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { analyzePosturalData, saveAnalysis, getAnalysis, type AnalysisResult } from '@/services/posturalAnalysisService';
 
 interface DiagnosticAIProps {
   clientData: any;
@@ -14,272 +13,163 @@ interface DiagnosticAIProps {
   onDiagnosisComplete: (diagnosis: any) => void;
 }
 
-interface PosturalPattern {
-  id: string;
-  name: string;
-  severity: 'Leve' | 'Moderado' | 'Grave';
-  confidence: number;
-  description: string;
-  criteria: string[];
-  recommendations: string[];
-  exercises: string[];
-  icd10: string;
-}
-
 const DiagnosticAI = ({ clientData, measurements, onDiagnosisComplete }: DiagnosticAIProps) => {
+  const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [diagnosis, setDiagnosis] = useState<PosturalPattern[]>([]);
-  const [overallScore, setOverallScore] = useState(0);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Padrões posturais baseados nos 50 protocolos fornecidos
-  const analyzePosturalPatterns = (measurements: any): PosturalPattern[] => {
-    const patterns: PosturalPattern[] = [];
-
-    // P01 - Corretor de Hipercifose Torácica
-    if (measurements.thoracicKyphosis > 40) {
-      const severity = measurements.thoracicKyphosis > 60 ? 'Grave' : 
-                     measurements.thoracicKyphosis > 50 ? 'Moderado' : 'Leve';
-      patterns.push({
-        id: 'P01',
-        name: 'Hipercifose Torácica',
-        severity,
-        confidence: 0.95,
-        description: 'Aumento da curvatura torácica causada por fraqueza dos extensores torácicos e postura sentada prolongada.',
-        criteria: [
-          `Ângulo de cifose torácica: ${measurements.thoracicKyphosis}° (Normal: 20-40°)`,
-          'Fraqueza dos extensores torácicos',
-          'Postura sentada prolongada'
-        ],
-        recommendations: [
-          'Liberação miofascial peitoral 2x/dia, 1 minuto',
-          'Exercícios de extensão torácica',
-          'Fortalecimento dos músculos romboides e trapézio médio'
-        ],
-        exercises: [
-          'Liberação peitoral com rolo (2x/dia, 1 minuto)',
-          'Extensão torácica sobre foam roller (3x10 reps)',
-          'Superman hold progressivo (15s → 45s)'
-        ],
-        icd10: 'M40.0'
-      });
-    }
-
-    // P02 - Alinhamento de Cabeça Anterior
-    if (measurements.cranioCervicalAngle < 50) {
-      const severity = measurements.cranioCervicalAngle < 40 ? 'Grave' : 
-                     measurements.cranioCervicalAngle < 45 ? 'Moderado' : 'Leve';
-      patterns.push({
-        id: 'P02',
-        name: 'Projeção Anterior da Cabeça',
-        severity,
-        confidence: 0.92,
-        description: 'Anteriorização da cabeça causada por uso excessivo de dispositivos móveis e fraqueza cervical.',
-        criteria: [
-          `Ângulo crânio-cervical: ${measurements.cranioCervicalAngle}° (Normal: 50-60°)`,
-          'Uso excessivo de dispositivos',
-          'Fraqueza dos flexores cervicais profundos'
-        ],
-        recommendations: [
-          'Ajustar altura da tela na altura dos olhos',
-          'Fortalecimento dos flexores cervicais profundos',
-          'Alongamento da cadeia posterior'
-        ],
-        exercises: [
-          'Chin tuck contra resistência manual (3x12 reps)',
-          'Flexão cervical isométrica (4x20s)',
-          'Alongamento dos extensores cervicais'
-        ],
-        icd10: 'M43.1'
-      });
-    }
-
-    // P04 - Hiperlordose Lombar
-    if (measurements.lumbarLordosis > 60) {
-      const severity = measurements.lumbarLordosis > 80 ? 'Grave' : 
-                     measurements.lumbarLordosis > 70 ? 'Moderado' : 'Leve';
-      patterns.push({
-        id: 'P04',
-        name: 'Hiperlordose Lombar',
-        severity,
-        confidence: 0.89,
-        description: 'Aumento da curvatura lombar causado por encurtamento do iliopsoas e fraqueza abdominal.',
-        criteria: [
-          `Ângulo de lordose lombar: ${measurements.lumbarLordosis}° (Normal: 40-60°)`,
-          'Encurtamento do iliopsoas',
-          'Fraqueza da musculatura abdominal'
-        ],
-        recommendations: [
-          'Alongamento dos flexores do quadril',
-          'Fortalecimento do core',
-          'Correção de padrões de movimento'
-        ],
-        exercises: [
-          'Alongamento do iliopsoas (3x30s/lado)',
-          'Deadbug (3x10)',
-          'Prancha frontal progressiva'
-        ],
-        icd10: 'M40.3'
-      });
-    }
-
-    // P13 - Escoliose (baseada no ângulo de Cobb)
-    if (measurements.cobbAngle > 10) {
-      const severity = measurements.cobbAngle > 25 ? 'Grave' : 
-                     measurements.cobbAngle > 15 ? 'Moderado' : 'Leve';
-      patterns.push({
-        id: 'P13',
-        name: 'Escoliose Torácica',
-        severity,
-        confidence: 0.94,
-        description: 'Curvatura lateral da coluna com rotação vertebral associada.',
-        criteria: [
-          `Ângulo de Cobb: ${measurements.cobbAngle}° (Normal: <10°)`,
-          'Assimetria de ombros e quadris',
-          'Rotação do tronco'
-        ],
-        recommendations: [
-          'Exercícios de correção assimétrica',
-          'Respiração costal diferencial',
-          'Fortalecimento específico do lado convexo'
-        ],
-        exercises: [
-          'Respiração costal diferencial',
-          'Correção ativa no espelho',
-          'Exercícios de Schroth modificado'
-        ],
-        icd10: 'M41.9'
-      });
-    }
-
-    // P06 - Assimetria de Ombros
-    if (Math.abs(measurements.shoulderImbalance) > 5) {
-      const severity = Math.abs(measurements.shoulderImbalance) > 15 ? 'Grave' : 
-                     Math.abs(measurements.shoulderImbalance) > 10 ? 'Moderado' : 'Leve';
-      patterns.push({
-        id: 'P06',
-        name: 'Assimetria de Ombros',
-        severity,
-        confidence: 0.88,
-        description: 'Desnível entre os ombros causado por padrões assimétricos de movimento.',
-        criteria: [
-          `Desnível de ombros: ${measurements.shoulderImbalance}mm (Normal: ±5mm)`,
-          'Padrões assimétricos de uso',
-          'Desequilíbrio muscular'
-        ],
-        recommendations: [
-          'Correção de padrões assimétricos',
-          'Fortalecimento unilateral do lado baixo',
-          'Alongamento do trapézio superior'
-        ],
-        exercises: [
-          'Elevação escapular unilateral (3x12)',
-          'Remada unilateral (3x10)',
-          'Alongamento do trapézio superior'
-        ],
-        icd10: 'M25.3'
-      });
-    }
-
-    return patterns;
-  };
-
-  const runDiagnosis = async () => {
-    setIsAnalyzing(true);
-    setAnalysisProgress(0);
-
-    const steps = [
-      { step: 'Analisando medições angulares...', progress: 20 },
-      { step: 'Identificando padrões posturais...', progress: 40 },
-      { step: 'Comparando com critérios validados...', progress: 60 },
-      { step: 'Calculando confiabilidade...', progress: 80 },
-      { step: 'Gerando recomendações...', progress: 100 }
-    ];
-
-    for (const { step, progress } of steps) {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setAnalysisProgress(progress);
+  const handleAnalyze = async () => {
+    if (!measurements.evaluationId) {
       toast({
-        title: step,
-        description: `Progresso: ${progress}%`
+        title: "Erro",
+        description: "Nenhuma avaliação encontrada. Salve a avaliação primeiro.",
+        variant: "destructive"
       });
+      return;
     }
 
-    const detectedPatterns = analyzePosturalPatterns(measurements);
-    setDiagnosis(detectedPatterns);
+    setIsAnalyzing(true);
     
-    // Calcular score geral baseado na severidade dos padrões
-    const totalSeverity = detectedPatterns.reduce((sum, pattern) => {
-      const severityWeight = pattern.severity === 'Grave' ? 3 : 
-                           pattern.severity === 'Moderado' ? 2 : 1;
-      return sum + severityWeight;
-    }, 0);
-    
-    const maxPossibleSeverity = detectedPatterns.length * 3;
-    const calculatedScore = Math.max(0, 100 - (totalSeverity / maxPossibleSeverity) * 50);
-    setOverallScore(Math.round(calculatedScore));
-
-    setIsAnalyzing(false);
-    onDiagnosisComplete({ patterns: detectedPatterns, score: calculatedScore });
-
-    toast({
-      title: "Diagnóstico concluído!",
-      description: `${detectedPatterns.length} padrões posturais identificados.`,
-    });
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'Grave': return 'text-red-700 bg-red-100';
-      case 'Moderado': return 'text-yellow-700 bg-yellow-100';
-      case 'Leve': return 'text-green-700 bg-green-100';
-      default: return 'text-gray-700 bg-gray-100';
+    try {
+      // Primeiro tenta buscar análise existente
+      const existingAnalysis = await getAnalysis(measurements.evaluationId);
+      
+      if (existingAnalysis) {
+        setAnalysis(existingAnalysis);
+        onDiagnosisComplete(existingAnalysis);
+        toast({
+          title: "Análise carregada",
+          description: "Análise anterior encontrada e carregada."
+        });
+      } else {
+        // Se não existe, criar nova análise com dados reais
+        const result = await analyzePosturalData(measurements.evaluationId);
+        setAnalysis(result);
+        onDiagnosisComplete(result);
+        
+        toast({
+          title: "Análise completa!",
+          description: `${result.patterns.length} padrões identificados.`
+        });
+      }
+    } catch (error) {
+      console.error('Erro na análise:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível completar a análise. Verifique se a avaliação foi salva.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  if (!diagnosis.length && !isAnalyzing) {
+  const handleSaveAnalysis = async () => {
+    if (!analysis || !user || !measurements.evaluationId) {
+      toast({
+        title: "Erro",
+        description: "Dados insuficientes para salvar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await saveAnalysis(measurements.evaluationId, analysis, user.id);
+      
+      toast({
+        title: "Sucesso!",
+        description: "Análise salva no banco de dados."
+      });
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar a análise.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const getSeverityColor = (severity: number) => {
+    if (severity >= 3) return 'bg-red-500';
+    if (severity === 2) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
+  const getRiskBadge = (risk: string) => {
+    const colors = {
+      low: 'bg-green-100 text-green-800 border-green-300',
+      medium: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      high: 'bg-red-100 text-red-800 border-red-300'
+    };
+    const labels = { low: 'Baixo', medium: 'Médio', high: 'Alto' };
+    return { color: colors[risk as keyof typeof colors], label: labels[risk as keyof typeof labels] };
+  };
+
+  if (!analysis) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Brain className="h-5 w-5 mr-2 text-purple-600" />
-            Diagnóstico Inteligente SAARS
+      <Card className="border-2 border-primary/20">
+        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-primary" />
+            Diagnóstico Automático com IA
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-center space-y-4">
-            <Brain className="h-16 w-16 mx-auto text-purple-500" />
+        <CardContent className="p-8">
+          <div className="text-center space-y-6">
+            <div className="bg-primary/5 rounded-full w-24 h-24 flex items-center justify-center mx-auto">
+              <Brain className="h-12 w-12 text-primary" />
+            </div>
+            
             <div>
-              <h3 className="text-lg font-semibold">Análise Postural com IA</h3>
-              <p className="text-gray-600">
-                Nossa IA analisará as medições posturais usando critérios científicos validados 
-                para identificar padrões e gerar diagnósticos precisos.
+              <h3 className="text-xl font-semibold mb-2">Análise Inteligente Pronta</h3>
+              <p className="text-muted-foreground">
+                A IA analisará os dados posturais reais da avaliação e gerará um diagnóstico 
+                detalhado com recomendações personalizadas.
               </p>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <CheckCircle className="h-8 w-8 mx-auto text-blue-600 mb-2" />
-                <p className="font-medium">50 Protocolos</p>
-                <p className="text-sm text-gray-600">Padrões validados</p>
+              <div className="p-4 bg-card rounded-lg border-2">
+                <CheckCircle className="h-8 w-8 mx-auto text-green-600 mb-2" />
+                <p className="font-medium">Dados Reais</p>
+                <p className="text-sm text-muted-foreground">Da avaliação</p>
               </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <FileText className="h-8 w-8 mx-auto text-green-600 mb-2" />
-                <p className="font-medium">CID-10</p>
-                <p className="text-sm text-gray-600">Códigos de diagnóstico</p>
+              <div className="p-4 bg-card rounded-lg border-2">
+                <Brain className="h-8 w-8 mx-auto text-blue-600 mb-2" />
+                <p className="font-medium">Análise IA</p>
+                <p className="text-sm text-muted-foreground">Padrões posturais</p>
               </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <Brain className="h-8 w-8 mx-auto text-purple-600 mb-2" />
-                <p className="font-medium">IA Avançada</p>
-                <p className="text-sm text-gray-600">Critérios científicos</p>
+              <div className="p-4 bg-card rounded-lg border-2">
+                <AlertTriangle className="h-8 w-8 mx-auto text-orange-600 mb-2" />
+                <p className="font-medium">Recomendações</p>
+                <p className="text-sm text-muted-foreground">Personalizadas</p>
               </div>
             </div>
+
             <Button 
-              onClick={runDiagnosis}
-              className="bg-purple-600 hover:bg-purple-700"
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
               size="lg"
+              className="w-full md:w-auto"
             >
-              <Brain className="h-5 w-5 mr-2" />
-              Iniciar Diagnóstico IA
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Analisando dados reais...
+                </>
+              ) : (
+                <>
+                  <Brain className="mr-2 h-5 w-5" />
+                  Iniciar Diagnóstico Automático
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
@@ -287,134 +177,133 @@ const DiagnosticAI = ({ clientData, measurements, onDiagnosisComplete }: Diagnos
     );
   }
 
-  if (isAnalyzing) {
-    return (
-      <Card>
-        <CardContent className="p-8">
-          <div className="text-center space-y-4">
-            <Brain className="h-16 w-16 mx-auto text-purple-500 animate-pulse" />
-            <h3 className="text-lg font-semibold">Processando Diagnóstico...</h3>
-            <Progress value={analysisProgress} className="w-full" />
-            <p className="text-sm text-gray-500">{analysisProgress}% concluído</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const riskBadge = getRiskBadge(analysis.riskLevel);
 
   return (
     <div className="space-y-6">
-      {/* Score e Resumo */}
-      <Card>
+      {/* Score Principal */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Brain className="h-6 w-6 text-primary" />
+              Resultado da Análise
+            </div>
+            <Badge className={riskBadge.color} variant="outline">
+              Risco: {riskBadge.label}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">
-                {overallScore}
-              </div>
-              <div className="text-sm text-gray-600">Score SAARS</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600 mb-2">
-                {diagnosis.length}
-              </div>
-              <div className="text-sm text-gray-600">Padrões Identificados</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 mb-2">
-                {Math.round(diagnosis.reduce((acc, d) => acc + d.confidence, 0) / diagnosis.length * 100)}%
-              </div>
-              <div className="text-sm text-gray-600">Confiabilidade Média</div>
-            </div>
+          <div className="text-center mb-6">
+            <div className="text-5xl font-bold text-primary mb-2">{analysis.overallScore}</div>
+            <p className="text-muted-foreground">Score Postural (0-100)</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {analysis.patterns.length} padrão(ões) identificado(s)
+            </p>
+          </div>
+          
+          <div className="w-full bg-secondary rounded-full h-4 mb-4">
+            <div 
+              className={`h-4 rounded-full transition-all duration-500 ${
+                analysis.overallScore >= 80 ? 'bg-green-500' :
+                analysis.overallScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${analysis.overallScore}%` }}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-center">
+            <Button onClick={handleAnalyze} variant="outline" size="sm">
+              <Brain className="mr-2 h-4 w-4" />
+              Reanalisar
+            </Button>
+            <Button onClick={handleSaveAnalysis} disabled={isSaving} size="sm">
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Salvar Análise
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Diagnósticos Detalhados */}
-      <Tabs defaultValue="patterns" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="patterns">Padrões Identificados</TabsTrigger>
-          <TabsTrigger value="recommendations">Recomendações</TabsTrigger>
-          <TabsTrigger value="exercises">Exercícios</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="patterns" className="space-y-4">
-          {diagnosis.map((pattern) => (
-            <Card key={pattern.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-semibold text-lg">{pattern.name}</h4>
-                      <Badge className={getSeverityColor(pattern.severity)}>
-                        {pattern.severity}
-                      </Badge>
-                      <Badge variant="outline">{pattern.id}</Badge>
-                      <Badge variant="secondary">CID: {pattern.icd10}</Badge>
+      {/* Padrões Identificados */}
+      {analysis.patterns.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Padrões Posturais Detectados</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {analysis.patterns.map((pattern) => (
+              <div key={pattern.code} className="p-4 border-2 rounded-lg bg-card hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline">{pattern.code}</Badge>
+                      <h4 className="font-semibold">{pattern.name}</h4>
                     </div>
-                    <p className="text-gray-700 mb-3">{pattern.description}</p>
-                    
-                    <div className="space-y-2">
-                      <h5 className="font-medium">Critérios Identificados:</h5>
-                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        {pattern.criteria.map((criterion, index) => (
-                          <li key={index}>{criterion}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      <strong>Causa:</strong> {pattern.cause}
+                    </p>
                   </div>
-                  <div className="text-center ml-4">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {Math.round(pattern.confidence * 100)}%
-                    </div>
-                    <div className="text-xs text-gray-500">Confiança</div>
+                  <div className="flex items-center gap-1">
+                    {[...Array(pattern.severity)].map((_, i) => (
+                      <div key={i} className={`w-3 h-3 rounded-full ${getSeverityColor(pattern.severity)}`} />
+                    ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
 
-        <TabsContent value="recommendations" className="space-y-4">
-          {diagnosis.map((pattern) => (
-            <Card key={`rec-${pattern.id}`}>
-              <CardHeader>
-                <CardTitle className="text-lg">{pattern.name} - Recomendações</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {pattern.recommendations.map((rec, index) => (
-                    <li key={index} className="flex items-start">
-                      <Lightbulb className="h-4 w-4 text-yellow-500 mr-2 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{rec}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
+                <div className="mb-3">
+                  <p className="text-sm font-medium mb-1">Sintomas:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {pattern.symptoms.map((symptom, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {symptom}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
 
-        <TabsContent value="exercises" className="space-y-4">
-          {diagnosis.map((pattern) => (
-            <Card key={`ex-${pattern.id}`}>
-              <CardHeader>
-                <CardTitle className="text-lg">{pattern.name} - Exercícios</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {pattern.exercises.map((exercise, index) => (
-                    <li key={index} className="flex items-start">
-                      <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{exercise}</span>
-                    </li>
+                <div className="mb-3">
+                  <p className="text-sm font-medium mb-2">Exercícios Recomendados:</p>
+                  <ul className="space-y-1">
+                    {pattern.keyExercises.map((exercise, idx) => (
+                      <li key={idx} className="text-sm flex items-start">
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                        {exercise}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t">
+                  <Badge variant="outline">{pattern.duration}</Badge>
+                  {pattern.reminders.map((reminder, idx) => (
+                    <p key={idx} className="text-xs text-orange-600 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      {reminder}
+                    </p>
                   ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-      </Tabs>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Excelente!</h3>
+            <p className="text-muted-foreground">
+              Nenhum padrão postural patológico foi identificado.
+              Continue com exercícios preventivos.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

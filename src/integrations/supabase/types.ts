@@ -210,6 +210,56 @@ export type Database = {
           },
         ]
       }
+      postural_analyses: {
+        Row: {
+          analysis_date: string | null
+          created_at: string | null
+          created_by: string
+          evaluation_id: string
+          exercise_protocols: Json | null
+          id: string
+          identified_patterns: Json | null
+          overall_score: number
+          recommendations: Json | null
+          risk_level: string
+          updated_at: string | null
+        }
+        Insert: {
+          analysis_date?: string | null
+          created_at?: string | null
+          created_by: string
+          evaluation_id: string
+          exercise_protocols?: Json | null
+          id?: string
+          identified_patterns?: Json | null
+          overall_score: number
+          recommendations?: Json | null
+          risk_level: string
+          updated_at?: string | null
+        }
+        Update: {
+          analysis_date?: string | null
+          created_at?: string | null
+          created_by?: string
+          evaluation_id?: string
+          exercise_protocols?: Json | null
+          id?: string
+          identified_patterns?: Json | null
+          overall_score?: number
+          recommendations?: Json | null
+          risk_level?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "postural_analyses_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -364,6 +414,10 @@ export type Database = {
           | { new_role: string; target_user_id: string }
         Returns: boolean
       }
+      add_user_role_simple: {
+        Args: { p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       can_perform_action: {
         Args: { required_role: string }
         Returns: boolean
@@ -374,6 +428,18 @@ export type Database = {
           evaluation_id: string
           message: string
           success: boolean
+        }[]
+      }
+      get_own_full_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
         }[]
       }
       get_student_evaluations: {
