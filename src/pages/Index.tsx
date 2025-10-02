@@ -12,35 +12,13 @@ import WorkoutPlans from '@/components/WorkoutPlans';
 import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 import SystemSummary from '@/components/SystemSummary';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
-  const { user } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false);
-  const [userRole, setUserRole] = useState<'teacher' | 'student'>('student');
+  const [userRole] = useState<'teacher' | 'student'>('teacher');
 
   console.log('Index - currentView:', currentView);
-
-  // Get user role from profile
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile) {
-          setUserRole(profile.role);
-        }
-      }
-    };
-
-    fetchUserRole();
-  }, [user]);
 
   // Verificar se há uma avaliação completa no localStorage
   useEffect(() => {

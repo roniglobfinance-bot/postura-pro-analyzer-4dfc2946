@@ -1,9 +1,4 @@
-
-import { useState } from 'react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { 
   Camera, 
   FileText, 
@@ -21,11 +16,6 @@ interface NavigationProps {
 }
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
-  const [userProfile] = useState({
-    name: 'Usuário PosturaPro',
-    role: 'teacher' as 'teacher' | 'student'
-  });
-
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'photo-docs', label: 'Documentação Fotográfica', icon: Camera },
@@ -37,31 +27,12 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'profile', label: 'Perfil', icon: User }
   ];
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
   return (
     <nav className="w-64 bg-white border-r border-gray-200 min-h-screen p-4">
-      <Card className="mb-4">
-        <CardHeader className="pb-4">
-          <div className="flex items-center space-x-3">
-            <Avatar>
-              <AvatarFallback>
-                {getInitials(userProfile.name)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <CardTitle className="text-lg">{userProfile.name}</CardTitle>
-              <div className="flex items-center space-x-2">
-                <Badge variant={userProfile.role === 'teacher' ? 'default' : 'secondary'}>
-                  {userProfile.role === 'teacher' ? 'Professor' : 'Aluno'}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
+      <div className="mb-6 px-4 py-6 bg-gradient-to-br from-[#2E5A88] to-[#4CAF50] rounded-lg text-white">
+        <h2 className="text-xl font-bold mb-1">PosturaPro</h2>
+        <p className="text-sm opacity-90">Sistema de Análise</p>
+      </div>
       
       <div className="space-y-2">
         {menuItems.map((item) => (
