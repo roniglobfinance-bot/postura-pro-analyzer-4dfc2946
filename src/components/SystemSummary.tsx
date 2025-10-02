@@ -15,7 +15,6 @@ import {
   Settings,
   Activity
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SystemStatus {
@@ -27,32 +26,21 @@ interface SystemStatus {
 }
 
 const SystemSummary = () => {
-  const { user } = useAuth();
-  const [userRole, setUserRole] = useState<string>('student');
+  const [userRole, setUserRole] = useState<string>('teacher');
   const [systemStats, setSystemStats] = useState<any>({});
 
+  // Sistema sem autenticação - role fixo
   useEffect(() => {
+    setUserRole('teacher');
     loadSystemStatus();
-  }, [user]);
+  }, []);
 
   const loadSystemStatus = async () => {
-    if (user) {
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      
-      if (profile) {
-        setUserRole(profile.role);
-      }
-
-      // Get system statistics
+    try {
+      // Get system statistics sem filtro de usuário
       const { data: evaluations } = await supabase
         .from('evaluations')
-        .select('*')
-        .eq(profile?.role === 'teacher' ? 'teacher_id' : 'student_id', user.id);
+        .select('*');
 
       const { data: photos } = await supabase
         .from('photos')
@@ -60,15 +48,16 @@ const SystemSummary = () => {
 
       const { data: students } = await supabase
         .from('students')
-        .select('*')
-        .eq('teacher_id', user.id);
+        .select('*');
 
       setSystemStats({
         totalEvaluations: evaluations?.length || 0,
         totalPhotos: photos?.length || 0,
         totalStudents: students?.length || 0,
-        userRole: profile?.role || 'student'
+        userRole: 'teacher'
       });
+    } catch (error) {
+      console.error('Error loading system stats:', error);
     }
   };
 

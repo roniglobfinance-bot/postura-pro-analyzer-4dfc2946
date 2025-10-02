@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Brain, AlertTriangle, CheckCircle, Loader2, Save } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { analyzePosturalData, saveAnalysis, getAnalysis, type AnalysisResult } from '@/services/posturalAnalysisService';
 
 interface DiagnosticAIProps {
@@ -14,7 +13,6 @@ interface DiagnosticAIProps {
 }
 
 const DiagnosticAI = ({ clientData, measurements, onDiagnosisComplete }: DiagnosticAIProps) => {
-  const { user } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +64,7 @@ const DiagnosticAI = ({ clientData, measurements, onDiagnosisComplete }: Diagnos
   };
 
   const handleSaveAnalysis = async () => {
-    if (!analysis || !user || !measurements.evaluationId) {
+    if (!analysis || !measurements.evaluationId) {
       toast({
         title: "Erro",
         description: "Dados insuficientes para salvar.",
@@ -78,7 +76,7 @@ const DiagnosticAI = ({ clientData, measurements, onDiagnosisComplete }: Diagnos
     setIsSaving(true);
 
     try {
-      await saveAnalysis(measurements.evaluationId, analysis, user.id);
+      await saveAnalysis(measurements.evaluationId, analysis, 'system-user');
       
       toast({
         title: "Sucesso!",

@@ -17,9 +17,8 @@ import {
   ChartBar,
   UserPlus
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSupabaseFunctions } from '@/hooks/useSupabaseFunctions';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
@@ -35,18 +34,10 @@ interface RoleDashboardProps {
 }
 
 const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
-  const { user } = useAuth();
-  const { 
-    loading, 
-    getTeacherStudents, 
-    getStudentEvaluations, 
-    addStudentToTeacher,
-    createEvaluation 
-  } = useSupabaseFunctions();
-  
   const [stats, setStats] = useState<any>({});
   const [students, setStudents] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [studentEmail, setStudentEmail] = useState('');
   const [isCreateEvalOpen, setIsCreateEvalOpen] = useState(false);
@@ -54,10 +45,8 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
   useEffect(() => {
-    if (user) {
-      loadDashboardData();
-    }
-  }, [user, userRole]);
+    loadDashboardData();
+  }, [userRole]);
 
   const loadDashboardData = async () => {
     try {
@@ -72,75 +61,126 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   };
 
   const loadTeacherData = async () => {
-    if (!user) return;
+    setLoading(true);
+    try {
+      // Load all profiles marked as students
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'student')
+        .order('created_at', { ascending: false });
 
-    // Load teacher's students using new function
-    const studentsData = await getTeacherStudents();
-    setStudents(studentsData);
+      setStudents(profilesData || []);
 
-    // Load evaluations for teacher
-    const { data: evaluationsData } = await supabase
-      .from('evaluations')
-      .select('*')
-      .eq('teacher_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(10);
+      // Load all evaluations
+      const { data: evaluationsData } = await supabase
+        .from('evaluations')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    setEvaluations(evaluationsData || []);
+      setEvaluations(evaluationsData || []);
 
-    // Calculate stats
-    const totalStudents = studentsData.length;
-    const totalEvaluations = evaluationsData?.length || 0;
-    const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
-    const pendingEvaluations = totalEvaluations - completedEvaluations;
+      // Calculate stats
+      const totalStudents = profilesData?.length || 0;
+      const totalEvaluations = evaluationsData?.length || 0;
+      const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
+      const pendingEvaluations = totalEvaluations - completedEvaluations;
 
-    setStats({
-      totalStudents,
-      totalEvaluations,
-      completedEvaluations,
-      pendingEvaluations
-    });
+      setStats({
+        totalStudents,
+        totalEvaluations,
+        completedEvaluations,
+        pendingEvaluations
+      });
+    } catch (error) {
+      console.error('Error loading teacher data:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao carregar dados',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadStudentData = async () => {
-    if (!user) return;
+    setLoading(true);
+    try {
+      // Load all evaluations
+      const { data: evaluationsData } = await supabase
+        .from('evaluations')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    // Load student's evaluations using new function
-    const evaluationsData = await getStudentEvaluations();
-    setEvaluations(evaluationsData);
+      setEvaluations(evaluationsData || []);
 
-    // Calculate stats
-    const totalEvaluations = evaluationsData.length;
-    const completedEvaluations = evaluationsData.filter(e => e.status === 'completed').length;
-    const lastEvaluation = evaluationsData[0];
+      // Calculate stats
+      const totalEvaluations = evaluationsData?.length || 0;
+      const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
+      const lastEvaluation = evaluationsData?.[0];
 
-    setStats({
-      totalEvaluations,
-      completedEvaluations,
-      lastEvaluation: lastEvaluation?.created_at || null
-    });
+      setStats({
+        totalEvaluations,
+        completedEvaluations,
+        lastEvaluation: lastEvaluation?.created_at || null
+      });
+    } catch (error) {
+      console.error('Error loading student data:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao carregar dados',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddStudent = async () => {
-    if (!user || !studentEmail) return;
+    if (!studentEmail) return;
 
-    const result = await addStudentToTeacher(user.id, studentEmail);
-    if (result.success) {
-      setStudentEmail('');
-      setIsAddStudentOpen(false);
-      loadTeacherData(); // Reload data
-    }
+    toast({
+      title: 'Funcionalidade Simplificada',
+      description: 'Gerenciamento de alunos disponível na versão completa',
+    });
+    setIsAddStudentOpen(false);
   };
 
   const handleCreateEvaluation = async () => {
     if (!evalTitle) return;
 
-    const result = await createEvaluation(evalTitle, selectedStudentId || undefined);
-    if (result.success) {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('evaluations')
+        .insert({
+          title: evalTitle,
+          student_id: selectedStudentId || null,
+          status: 'draft'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Avaliação criada com sucesso'
+      });
+
       setEvalTitle('');
       setSelectedStudentId('');
       setIsCreateEvalOpen(false);
-      loadTeacherData(); // Reload data
+      loadTeacherData();
+    } catch (error) {
+      console.error('Error creating evaluation:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao criar avaliação',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -265,34 +305,34 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {students.map((student) => (
-                <Card key={student.student_id}>
+                <Card key={student.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{student.full_name}</h4>
+                      <h4 className="font-medium">{student.full_name || 'Sem nome'}</h4>
                       <Badge variant="outline">
                         <GraduationCap className="h-3 w-3 mr-1" />
                         Aluno
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">{student.email}</p>
-            <div className="flex space-x-2">
-              <Button size="sm" variant="outline">
-                <Eye className="h-3 w-3 mr-1" />
-                Ver
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => {
-                  setSelectedStudentId(student.student_id);
-                  setEvalTitle(`Avaliação de ${student.full_name} - ${new Date().toLocaleDateString('pt-BR')}`);
-                  setIsCreateEvalOpen(true);
-                }}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Avaliar
-              </Button>
-            </div>
+                    <div className="flex space-x-2">
+                      <Button size="sm" variant="outline">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Ver
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedStudentId(student.id);
+                          setEvalTitle(`Avaliação de ${student.full_name || student.email} - ${new Date().toLocaleDateString('pt-BR')}`);
+                          setIsCreateEvalOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Avaliar
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -336,8 +376,8 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
                       >
                         <option value="">Selecionar aluno...</option>
                         {students.map((student) => (
-                          <option key={student.student_id} value={student.student_id}>
-                            {student.full_name}
+                          <option key={student.id} value={student.id}>
+                            {student.full_name || student.email}
                           </option>
                         ))}
                       </select>

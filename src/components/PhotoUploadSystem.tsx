@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Camera
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,7 +36,6 @@ const PhotoUploadSystem = ({
   maxPhotos = 4,
   allowedViews = ['anterior', 'posterior', 'lateral_direita', 'lateral_esquerda']
 }: PhotoUploadSystemProps) => {
-  const { user } = useAuth();
   const [photos, setPhotos] = useState<PhotoData[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,12 +80,10 @@ const PhotoUploadSystem = ({
   };
 
   const uploadPhoto = async (photo: PhotoData): Promise<string | null> => {
-    if (!user) return null;
-
     try {
       // Create unique filename
       const fileExt = photo.file.name.split('.').pop();
-      const fileName = `${user.id}/${evaluationId || 'temp'}/${photo.viewType}_${Date.now()}.${fileExt}`;
+      const fileName = `temp/${evaluationId || 'temp'}/${photo.viewType}_${Date.now()}.${fileExt}`;
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage

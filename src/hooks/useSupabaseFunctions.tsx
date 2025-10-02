@@ -1,29 +1,24 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 
 export const useSupabaseFunctions = () => {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  // Get user profile with role
+  // Get user profile with role (sem autenticação - retorna dados genéricos)
   const getUserProfile = async (userId?: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_user_profile', {
-        user_id: userId || user?.id
-      });
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId || 'temp')
+        .single();
       
       if (error) throw error;
-      return data?.[0] || null;
+      return data || null;
     } catch (error) {
       console.error('Error getting user profile:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar o perfil do usuário",
-        variant: "destructive"
-      });
       return null;
     } finally {
       setLoading(false);
@@ -32,41 +27,22 @@ export const useSupabaseFunctions = () => {
 
   // Check if user is teacher
   const isTeacher = async (userId?: string) => {
-    try {
-      const { data, error } = await supabase.rpc('is_teacher', {
-        user_id: userId || user?.id
-      });
-      
-      if (error) throw error;
-      return data || false;
-    } catch (error) {
-      console.error('Error checking teacher status:', error);
-      return false;
-    }
+    return true; // Sistema sem autenticação
   };
 
   // Check if user is student
   const isStudent = async (userId?: string) => {
-    try {
-      const { data, error } = await supabase.rpc('is_student', {
-        user_id: userId || user?.id
-      });
-      
-      if (error) throw error;
-      return data || false;
-    } catch (error) {
-      console.error('Error checking student status:', error);
-      return false;
-    }
+    return false; // Sistema sem autenticação
   };
 
   // Get teacher's students
   const getTeacherStudents = async (teacherId?: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_teacher_students', {
-        teacher_id: teacherId || user?.id
-      });
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'student');
       
       if (error) throw error;
       return data || [];
@@ -87,9 +63,10 @@ export const useSupabaseFunctions = () => {
   const getStudentEvaluations = async (studentId?: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_student_evaluations', {
-        student_id: studentId || user?.id
-      });
+      const { data, error } = await supabase
+        .from('evaluations')
+        .select('*')
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data || [];
@@ -108,69 +85,34 @@ export const useSupabaseFunctions = () => {
 
   // Add student to teacher
   const addStudentToTeacher = async (teacherId: string, studentEmail: string) => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase.rpc('add_student_to_teacher', {
-        teacher_id: teacherId,
-        student_email: studentEmail
-      });
-      
-      if (error) throw error;
-      
-      const result = data?.[0];
-      if (result?.success) {
-        toast({
-          title: "Sucesso",
-          description: result.message,
-        });
-        return { success: true, studentId: result.student_id };
-      } else {
-        toast({
-          title: "Erro",
-          description: result?.message || "Erro ao adicionar aluno",
-          variant: "destructive"
-        });
-        return { success: false, message: result?.message };
-      }
-    } catch (error) {
-      console.error('Error adding student:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível adicionar o aluno",
-        variant: "destructive"
-      });
-      return { success: false, error };
-    } finally {
-      setLoading(false);
-    }
+    toast({
+      title: "Funcionalidade Simplificada",
+      description: "Gerenciamento de alunos disponível na versão completa",
+    });
+    return { success: true, studentId: 'temp' };
   };
 
   // Create new evaluation
   const createEvaluation = async (title: string, studentId?: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('create_evaluation', {
-        p_title: title,
-        p_student_id: studentId
-      });
+      const { data, error } = await supabase
+        .from('evaluations')
+        .insert({
+          title,
+          student_id: studentId || null,
+          status: 'draft'
+        })
+        .select()
+        .single();
       
       if (error) throw error;
       
-      const result = data?.[0];
-      if (result?.success) {
-        toast({
-          title: "Sucesso",
-          description: result.message,
-        });
-        return { success: true, evaluationId: result.evaluation_id };
-      } else {
-        toast({
-          title: "Erro",
-          description: result?.message || "Erro ao criar avaliação",
-          variant: "destructive"
-        });
-        return { success: false, message: result?.message };
-      }
+      toast({
+        title: "Sucesso",
+        description: "Avaliação criada com sucesso",
+      });
+      return { success: true, evaluationId: data.id };
     } catch (error) {
       console.error('Error creating evaluation:', error);
       toast({
@@ -188,28 +130,18 @@ export const useSupabaseFunctions = () => {
   const updateEvaluationStatus = async (evaluationId: string, status: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('update_evaluation_status', {
-        evaluation_id: evaluationId,
-        new_status: status
-      });
+      const { error } = await supabase
+        .from('evaluations')
+        .update({ status })
+        .eq('id', evaluationId);
       
       if (error) throw error;
       
-      const result = data?.[0];
-      if (result?.success) {
-        toast({
-          title: "Sucesso",
-          description: result.message,
-        });
-        return { success: true };
-      } else {
-        toast({
-          title: "Erro",
-          description: result?.message || "Erro ao atualizar status",
-          variant: "destructive"
-        });
-        return { success: false, message: result?.message };
-      }
+      toast({
+        title: "Sucesso",
+        description: "Status atualizado com sucesso",
+      });
+      return { success: true };
     } catch (error) {
       console.error('Error updating evaluation status:', error);
       toast({

@@ -16,7 +16,6 @@ import {
   ThumbsUp,
   Bug
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -34,7 +33,6 @@ interface FeedbackSystemProps {
 }
 
 const FeedbackSystem = ({ isTeacher = false }: FeedbackSystemProps) => {
-  const { user } = useAuth();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -45,10 +43,8 @@ const FeedbackSystem = ({ isTeacher = false }: FeedbackSystemProps) => {
   const [title, setTitle] = useState('');
 
   useEffect(() => {
-    if (user) {
-      loadFeedbacks();
-    }
-  }, [user, isTeacher]);
+    loadFeedbacks();
+  }, [isTeacher]);
 
   const loadFeedbacks = async () => {
     setLoading(true);
@@ -57,11 +53,6 @@ const FeedbackSystem = ({ isTeacher = false }: FeedbackSystemProps) => {
         .from('user_feedback')
         .select('*')
         .order('created_at', { ascending: false });
-
-      // Teachers can see all feedback, students only their own
-      if (!isTeacher) {
-        query = query.eq('user_id', user?.id);
-      }
 
       const { data, error } = await query;
 
@@ -80,14 +71,13 @@ const FeedbackSystem = ({ isTeacher = false }: FeedbackSystemProps) => {
   };
 
   const submitFeedback = async () => {
-    if (!message.trim() || !user) return;
+    if (!message.trim()) return;
 
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from('user_feedback')
         .insert({
-          user_id: user.id,
           type: feedbackType,
           message: `${title ? title + '\n\n' : ''}${message}`,
           status: 'open'

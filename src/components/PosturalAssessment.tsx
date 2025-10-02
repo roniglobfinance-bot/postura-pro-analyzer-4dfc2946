@@ -8,7 +8,6 @@ import AssessmentResults from './assessment/AssessmentResults';
 import PosturalMeasurements from './assessment/PosturalMeasurements';
 import DiagnosticAI from './assessment/DiagnosticAI';
 import PhotoUploadSystem from './PhotoUploadSystem';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Save, Upload } from 'lucide-react';
@@ -62,7 +61,6 @@ export interface PosturalAssessmentData {
 }
 
 const PosturalAssessment = () => {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('client-data');
   const [currentEvaluationId, setCurrentEvaluationId] = useState<string | null>(null);
   const [clientData, setClientData] = useState<ClientData>({
@@ -161,58 +159,39 @@ const PosturalAssessment = () => {
     setIsSaving(true);
     
     try {
-      if (user) {
-        // Save to Supabase if user is authenticated
-        const evaluationData = {
-          title: `Avaliação de ${clientData.fullName || 'Paciente'} - ${new Date().toLocaleDateString('pt-BR')}`,
-          age: clientData.age,
-          height: clientData.height,
-          weight: clientData.weight,
-          complaints: `${clientData.painLocation} - Intensidade: ${clientData.painIntensity}`,
-          cranio_cervical_angle: posturalData.headForward,
-          thoracic_kyphosis: posturalData.thoracicKyphosis,
-          lumbar_lordosis: posturalData.lumbarLordosis,
-          pelvic_tilt: posturalData.pelvicAnteversion,
-          shoulder_imbalance: posturalData.shouldersProtracted,
-          scapular_abduction: posturalData.scapularWinging > 2 ? 'excessive' : 'normal',
-          adams_test: posturalData.adamsTest,
-          squat_pattern: posturalData.squatPattern,
-          observations: posturalData.observations,
-          status: 'draft'
-        };
+      // Save to Supabase
+      const evaluationData = {
+        title: `Avaliação de ${clientData.fullName || 'Paciente'} - ${new Date().toLocaleDateString('pt-BR')}`,
+        age: clientData.age,
+        height: clientData.height,
+        weight: clientData.weight,
+        complaints: `${clientData.painLocation} - Intensidade: ${clientData.painIntensity}`,
+        cranio_cervical_angle: posturalData.headForward,
+        thoracic_kyphosis: posturalData.thoracicKyphosis,
+        lumbar_lordosis: posturalData.lumbarLordosis,
+        pelvic_tilt: posturalData.pelvicAnteversion,
+        shoulder_imbalance: posturalData.shouldersProtracted,
+        scapular_abduction: posturalData.scapularWinging > 2 ? 'excessive' : 'normal',
+        adams_test: posturalData.adamsTest,
+        squat_pattern: posturalData.squatPattern,
+        observations: posturalData.observations,
+        status: 'draft'
+      };
 
-        const { data: evaluation, error } = await supabase
-          .from('evaluations')
-          .insert([evaluationData])
-          .select()
-          .single();
+      const { data: evaluation, error } = await supabase
+        .from('evaluations')
+        .insert([evaluationData])
+        .select()
+        .single();
 
-        if (error) throw error;
+      if (error) throw error;
 
-        setCurrentEvaluationId(evaluation.id);
-        
-        toast({
-          title: "Sucesso!",
-          description: "Avaliação salva no banco de dados.",
-        });
-      } else {
-        // Fallback to localStorage if not authenticated
-        const assessmentData = {
-          clientData,
-          posturalData,
-          measurements,
-          diagnosis,
-          selectedProtocol,
-          date: new Date().toISOString()
-        };
-        
-        localStorage.setItem('completeAssessment', JSON.stringify(assessmentData));
-        
-        toast({
-          title: "Sucesso!",
-          description: "Avaliação salva localmente.",
-        });
-      }
+      setCurrentEvaluationId(evaluation.id);
+      
+      toast({
+        title: "Sucesso!",
+        description: "Avaliação salva no banco de dados.",
+      });
       
     } catch (error) {
       console.error('Erro ao salvar avaliação:', error);
