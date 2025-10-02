@@ -430,18 +430,6 @@ export type Database = {
           success: boolean
         }[]
       }
-      get_own_full_profile: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          avatar_url: string
-          created_at: string
-          email: string
-          full_name: string
-          id: string
-          role: Database["public"]["Enums"]["user_role"]
-          updated_at: string
-        }[]
-      }
       get_student_evaluations: {
         Args: { student_id?: string }
         Returns: {
