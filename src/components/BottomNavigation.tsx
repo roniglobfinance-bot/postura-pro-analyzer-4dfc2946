@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Home, BarChart3, Dumbbell, User, Camera } from 'lucide-react';
+import { Home, BarChart3, Dumbbell, User, Camera, Brain } from 'lucide-react';
 
 interface BottomNavigationProps {
   currentView: string;
@@ -10,9 +10,9 @@ interface BottomNavigationProps {
 const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) => {
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: Home },
+    { id: 'diagnostic', label: 'Diagnóstico', icon: Brain },
     { id: 'photo-docs', label: 'Análise', icon: Camera },
     { id: 'progress', label: 'Relatório', icon: BarChart3 },
-    { id: 'workouts', label: 'Treinos', icon: Dumbbell },
     { id: 'profile', label: 'Perfil', icon: User },
   ];
 

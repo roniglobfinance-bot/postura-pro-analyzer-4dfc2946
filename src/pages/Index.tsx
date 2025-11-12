@@ -13,6 +13,7 @@ import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 import SystemSummary from '@/components/SystemSummary';
 import AdvancedPosturalAnalysis from '@/components/AdvancedPosturalAnalysis';
+import DiagnosticEngine from '@/components/DiagnosticEngine';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -60,6 +61,8 @@ const Index = () => {
           return <ClientManagement />;
         case 'assessment':
           return <PosturalAssessment />;
+        case 'diagnostic':
+          return <DiagnosticEngine />;
         case 'advanced-analysis':
           return <AdvancedPosturalAnalysis />;
         case 'photo-docs':

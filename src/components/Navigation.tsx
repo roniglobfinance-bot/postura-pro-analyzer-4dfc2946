@@ -8,7 +8,8 @@ import {
   BarChart3,
   BookOpen,
   Home,
-  Scan
+  Scan,
+  Brain
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -21,6 +22,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'photo-docs', label: 'Documentação Fotográfica', icon: Camera },
     { id: 'assessment', label: 'Avaliação Postural', icon: FileText },
+    { id: 'diagnostic', label: 'Motor de Diagnóstico', icon: Brain },
     { id: 'advanced-analysis', label: 'Análise Avançada IA', icon: Scan },
     { id: 'progress', label: 'Relatórios', icon: BarChart3 },
     { id: 'workouts', label: 'Exercícios', icon: BookOpen },
