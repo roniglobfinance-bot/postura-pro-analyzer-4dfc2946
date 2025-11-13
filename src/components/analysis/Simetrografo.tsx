@@ -4,16 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Grid3x3, Ruler, RotateCw, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Grid3x3, Ruler, RotateCw, ZoomIn, ZoomOut, Move, Wand2, AlertCircle } from 'lucide-react';
 import { useAssessment, AnatomicalPoint } from '@/contexts/AssessmentContext';
+import { detectPoseFromImage, detectPosturalDeviations } from '@/services/poseDetectionService';
+import { toast } from '@/hooks/use-toast';
 import gridImage from '@/assets/simetrografo-grid.png';
 
 interface SimetrografoProps {
   imageUrl: string;
   view: 'anterior' | 'posterior' | 'lateralDireita' | 'lateralEsquerda';
+  clientHeight?: number; // Altura do cliente em cm
 }
 
-const Simetrografo = ({ imageUrl, view }: SimetrografoProps) => {
+const Simetrografo = ({ imageUrl, view, clientHeight = 170 }: SimetrografoProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gridOpacity, setGridOpacity] = useState(0.5);
   const [plumbLineVisible, setPlumbLineVisible] = useState(true);
@@ -24,8 +28,14 @@ const Simetrografo = ({ imageUrl, view }: SimetrografoProps) => {
   const [isMarking, setIsMarking] = useState(false);
   const [currentMarkerType, setCurrentMarkerType] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<any[]>([]);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [pixelToCmRatio, setPixelToCmRatio] = useState<number | null>(null);
+  const [calibrationMarkers, setCalibrationMarkers] = useState<{ top: AnatomicalPoint | null; bottom: AnatomicalPoint | null }>({
+    top: null,
+    bottom: null
+  });
   
-  const { addAnatomicalPoints, addMeasurement } = useAssessment();
+  const { data, addAnatomicalPoints, addMeasurement, addDiagnosticFlag } = useAssessment();
 
   // Pontos anatômicos padrão para marcar
   const defaultMarkers = {
@@ -142,6 +152,110 @@ const Simetrografo = ({ imageUrl, view }: SimetrografoProps) => {
     calculateMeasurements([...anatomicalMarkers, newMarker]);
   };
 
+  // Detectar pose automaticamente
+  const handleAutoDetect = async () => {
+    setIsDetecting(true);
+    toast({
+      title: "Detectando pose...",
+      description: "Analisando imagem para identificar pontos anatômicos",
+    });
+
+    try {
+      const poseResult = await detectPoseFromImage(imageUrl);
+      
+      if (poseResult) {
+        const detectedMarkers: AnatomicalPoint[] = poseResult.keypoints.map(kp => ({
+          id: `detected-${Date.now()}-${Math.random()}`,
+          name: kp.name,
+          x: kp.x,
+          y: kp.y,
+          type: 'landmark' as const
+        }));
+
+        setAnatomicalMarkers(detectedMarkers);
+        
+        // Detectar desvios posturais
+        const deviations = detectPosturalDeviations(poseResult.keypoints);
+        
+        // Converter desvios em flags
+        deviations.forEach(deviation => {
+          const flagCode = mapDeviationToFlag(deviation.deviation);
+          if (flagCode) {
+            addDiagnosticFlag({
+              code: flagCode,
+              name: deviation.deviation,
+              severity: deviation.severity,
+              source: 'auto-detected',
+              confidence: 85
+            });
+          }
+        });
+
+        // Calcular medições
+        calculateMeasurements(detectedMarkers);
+
+        toast({
+          title: "Detecção concluída!",
+          description: `${detectedMarkers.length} pontos identificados, ${deviations.length} desvios detectados`,
+        });
+      }
+    } catch (error) {
+      console.error('Erro na detecção:', error);
+      toast({
+        title: "Erro na detecção",
+        description: "Não foi possível detectar a pose automaticamente",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  // Mapear desvios para códigos de flags
+  const mapDeviationToFlag = (deviationName: string): string | null => {
+    const mapping: Record<string, string> = {
+      'Desnível de Ombros': 'PEP02',
+      'Desnível de Quadril': 'PEP09',
+      'Anteriorização de Cabeça': 'PEP01',
+      'Protrusão de Ombros': 'PEP03',
+      'Hipercifose Torácica': 'PEP05',
+      'Hiperlordose Lombar': 'PEP06'
+    };
+    return mapping[deviationName] || null;
+  };
+
+  // Calibrar escala (converter pixels para cm)
+  const calibrateScale = () => {
+    const topMarker = anatomicalMarkers.find(m => m.name === 'Topo da Cabeça');
+    const bottomMarker = anatomicalMarkers.find(m => 
+      m.name.includes('Maléolo') || m.name.includes('Calcâneo')
+    );
+
+    if (topMarker && bottomMarker && clientHeight) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const dy = Math.abs(topMarker.y - bottomMarker.y) * canvas.height;
+      const ratio = clientHeight / dy; // cm por pixel
+      
+      setPixelToCmRatio(ratio);
+      
+      toast({
+        title: "Calibração concluída",
+        description: `Escala: ${ratio.toFixed(4)} cm/px`,
+      });
+
+      // Recalcular medições com valores reais
+      calculateMeasurements(anatomicalMarkers);
+    } else {
+      toast({
+        title: "Calibração impossível",
+        description: "Marque o topo da cabeça e os maléolos/calcâneo primeiro",
+        variant: "destructive"
+      });
+    }
+  };
+
   const calculateMeasurements = (markers: AnatomicalPoint[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -155,27 +269,52 @@ const Simetrografo = ({ imageUrl, view }: SimetrografoProps) => {
     if (acromioDireito && acromioEsquerdo) {
       const dx = (acromioDireito.x - acromioEsquerdo.x) * canvas.width;
       const dy = (acromioDireito.y - acromioEsquerdo.y) * canvas.height;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const distancePx = Math.sqrt(dx * dx + dy * dy);
+      
+      // Converter para cm se calibrado
+      const distanceCm = pixelToCmRatio ? distancePx * pixelToCmRatio : null;
       
       newMeasurements.push({
         id: `meas-${Date.now()}`,
         name: 'Distância Interacromial',
-        value: distance,
-        unit: 'px',
+        value: distanceCm || distancePx,
+        unit: distanceCm ? 'cm' : 'px',
         reference: view,
         deviation: 0
       });
 
       // Calcular desníveis
-      const desnivel = Math.abs(acromioDireito.y - acromioEsquerdo.y) * canvas.height;
-      if (desnivel > 10) {
+      const desnivelPx = Math.abs(acromioDireito.y - acromioEsquerdo.y) * canvas.height;
+      const desnivelCm = pixelToCmRatio ? desnivelPx * pixelToCmRatio : null;
+      
+      if (desnivelPx > 10) {
         newMeasurements.push({
           id: `meas-${Date.now()}-1`,
           name: 'Desnível de Ombros',
-          value: desnivel,
-          unit: 'px',
+          value: desnivelCm || desnivelPx,
+          unit: distanceCm ? 'cm' : 'px',
           reference: view,
-          deviation: desnivel
+          deviation: desnivelCm || desnivelPx
+        });
+      }
+    }
+
+    // Calcular distância EIAS (quadril)
+    const eiasDireita = markers.find(m => m.name === 'EIAS D');
+    const eiasEsquerda = markers.find(m => m.name === 'EIAS E');
+
+    if (eiasDireita && eiasEsquerda) {
+      const desnivelPx = Math.abs(eiasDireita.y - eiasEsquerda.y) * canvas.height;
+      const desnivelCm = pixelToCmRatio ? desnivelPx * pixelToCmRatio : null;
+
+      if (desnivelPx > 8) {
+        newMeasurements.push({
+          id: `meas-${Date.now()}-2`,
+          name: 'Desnível de Quadril',
+          value: desnivelCm || desnivelPx,
+          unit: desnivelCm ? 'cm' : 'px',
+          reference: view,
+          deviation: desnivelCm || desnivelPx
         });
       }
     }
@@ -199,7 +338,50 @@ const Simetrografo = ({ imageUrl, view }: SimetrografoProps) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Alertas */}
+        {!pixelToCmRatio && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Marque o topo da cabeça e os maléolos para calibrar a escala e obter medidas em centímetros.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Controles */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <Label>Detecção Automática</Label>
+            <Button
+              onClick={handleAutoDetect}
+              disabled={isDetecting}
+              className="w-full"
+              variant="default"
+            >
+              <Wand2 className="h-4 w-4 mr-2" />
+              {isDetecting ? 'Detectando...' : 'Auto-Detectar'}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Calibração</Label>
+            <Button
+              onClick={calibrateScale}
+              disabled={!anatomicalMarkers.length}
+              className="w-full"
+              variant="outline"
+            >
+              <Ruler className="h-4 w-4 mr-2" />
+              Calibrar Escala
+            </Button>
+            {pixelToCmRatio && (
+              <Badge variant="secondary" className="w-full justify-center text-xs">
+                {pixelToCmRatio.toFixed(4)} cm/px
+              </Badge>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="space-y-2">
             <Label>Opacidade da Grade</Label>
