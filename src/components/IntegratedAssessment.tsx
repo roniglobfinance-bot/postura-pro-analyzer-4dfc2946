@@ -8,6 +8,7 @@ import {
   User, Camera, Scan, Brain, FileText, 
   Upload, Save, Download 
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { toast } from '@/hooks/use-toast';
 import Simetrografo from './analysis/Simetrografo';
@@ -18,6 +19,7 @@ import FlagSelector from './diagnostic/FlagSelector';
 import DiagnosticResults from './diagnostic/DiagnosticResults';
 import ProtocolViewer from './diagnostic/ProtocolViewer';
 import { generateDiagnosticReport } from '@/services/diagnosticEngine';
+import { convertAnalysisToFlags, deduplicateFlags, enrichFlags } from '@/services/flagConversionService';
 
 const IntegratedAssessment = () => {
   const { 
@@ -49,32 +51,41 @@ const IntegratedAssessment = () => {
   };
 
   const handleGenerateDiagnosis = () => {
-    if (selectedFlags.length === 0) {
+    // Combinar flags manuais com flags auto-detectados
+    const autoDetectedFlags = data.diagnosticFlags
+      .filter(f => f.source === 'auto-detected')
+      .map(f => f.code);
+    
+    const allFlags = [...new Set([...selectedFlags, ...autoDetectedFlags])];
+    
+    if (allFlags.length === 0) {
       toast({
-        title: 'Nenhum flag selecionado',
-        description: 'Selecione pelo menos um flag de avaliação',
+        title: 'Nenhum flag identificado',
+        description: 'Realize análises de IA ou selecione flags manualmente',
         variant: 'destructive'
       });
       return;
     }
 
-    // Adicionar flags ao contexto
+    // Adicionar flags manuais ao contexto
     selectedFlags.forEach(flag => {
-      addDiagnosticFlag({
-        code: flag,
-        name: flag,
-        severity: 3,
-        source: 'manual'
-      });
+      if (!data.diagnosticFlags.find(f => f.code === flag)) {
+        addDiagnosticFlag({
+          code: flag,
+          name: flag,
+          severity: 3,
+          source: 'manual'
+        });
+      }
     });
 
-    // Gerar diagnóstico
-    const result = generateDiagnosticReport({ flags: selectedFlags });
+    // Gerar diagnóstico com todos os flags
+    const result = generateDiagnosticReport({ flags: allFlags });
     setDiagnosis(result);
 
     toast({
       title: 'Diagnóstico gerado',
-      description: `${result.diagnoses.length} diagnóstico(s) identificado(s)`,
+      description: `${result.diagnoses.length} diagnóstico(s) baseado em ${allFlags.length} flags (${autoDetectedFlags.length} auto-detectados)`,
     });
     
     setActiveTab('diagnosis');
@@ -208,7 +219,11 @@ const IntegratedAssessment = () => {
                   </label>
                 </div>
               ) : (
-                <Simetrografo imageUrl={currentPhoto} view={selectedView} />
+                <Simetrografo 
+                  imageUrl={currentPhoto} 
+                  view={selectedView}
+                  clientHeight={data.clientData.height}
+                />
               )}
             </CardContent>
           </Card>
@@ -251,17 +266,52 @@ const IntegratedAssessment = () => {
           )}
         </TabsContent>
 
-        {/* 4. SELEÇÃO DE FLAGS */}
+        {/* 4. SELEÇÃO/CONFIRMAÇÃO DE FLAGS */}
         <TabsContent value="flags" className="space-y-4">
+          {/* Flags Auto-Detectados */}
+          {data.diagnosticFlags.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Flags Auto-Detectados pela IA</span>
+                  <Badge variant="secondary">
+                    {data.diagnosticFlags.length} detectado(s)
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {data.diagnosticFlags.map((flag) => (
+                    <Badge 
+                      key={flag.code} 
+                      variant="default"
+                      className="gap-2"
+                    >
+                      {flag.code} - {flag.name}
+                      {flag.confidence && (
+                        <span className="text-xs opacity-75">
+                          ({flag.confidence}%)
+                        </span>
+                      )}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <FlagSelector
             selectedFlags={selectedFlags}
             onFlagsChange={setSelectedFlags}
           />
           
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Badge variant="outline" className="py-2 px-4">
+              Total: {selectedFlags.length + data.diagnosticFlags.length} flags
+            </Badge>
             <Button
               onClick={handleGenerateDiagnosis}
-              disabled={selectedFlags.length === 0}
+              disabled={selectedFlags.length === 0 && data.diagnosticFlags.length === 0}
               size="lg"
             >
               <Brain className="h-4 w-4 mr-2" />
