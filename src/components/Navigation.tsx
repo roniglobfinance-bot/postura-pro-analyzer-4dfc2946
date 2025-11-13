@@ -20,10 +20,7 @@ interface NavigationProps {
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'photo-docs', label: 'Documentação Fotográfica', icon: Camera },
-    { id: 'assessment', label: 'Avaliação Postural', icon: FileText },
-    { id: 'diagnostic', label: 'Motor de Diagnóstico', icon: Brain },
-    { id: 'advanced-analysis', label: 'Análise Avançada IA', icon: Scan },
+    { id: 'assessment', label: 'Avaliação Integrada', icon: Scan },
     { id: 'progress', label: 'Relatórios', icon: BarChart3 },
     { id: 'workouts', label: 'Exercícios', icon: BookOpen },
     { id: 'clients', label: 'Gerenciar Alunos', icon: Users },

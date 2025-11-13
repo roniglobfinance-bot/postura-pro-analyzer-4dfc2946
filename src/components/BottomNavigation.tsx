@@ -10,8 +10,7 @@ interface BottomNavigationProps {
 const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) => {
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: Home },
-    { id: 'diagnostic', label: 'Diagnóstico', icon: Brain },
-    { id: 'photo-docs', label: 'Análise', icon: Camera },
+    { id: 'assessment', label: 'Avaliação', icon: Camera },
     { id: 'progress', label: 'Relatório', icon: BarChart3 },
     { id: 'profile', label: 'Perfil', icon: User },
   ];

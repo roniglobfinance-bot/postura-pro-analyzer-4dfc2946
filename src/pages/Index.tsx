@@ -5,15 +5,12 @@ import Navigation from '@/components/Navigation';
 import BottomNavigation from '@/components/BottomNavigation';
 import RoleDashboard from '@/components/RoleDashboard';
 import ClientManagement from '@/components/ClientManagement';
-import PosturalAssessment from '@/components/PosturalAssessment';
-import PhotoDocumentation from '@/components/PhotoDocumentation';
+import IntegratedAssessment from '@/components/IntegratedAssessment';
 import ProgressReports from '@/components/ProgressReports';
 import WorkoutPlans from '@/components/WorkoutPlans';
 import PricingPlans from '@/components/PricingPlans';
 import UserProfile from '@/components/UserProfile';
 import SystemSummary from '@/components/SystemSummary';
-import AdvancedPosturalAnalysis from '@/components/AdvancedPosturalAnalysis';
-import DiagnosticEngine from '@/components/DiagnosticEngine';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -60,13 +57,7 @@ const Index = () => {
         case 'clients':
           return <ClientManagement />;
         case 'assessment':
-          return <PosturalAssessment />;
-        case 'diagnostic':
-          return <DiagnosticEngine />;
-        case 'advanced-analysis':
-          return <AdvancedPosturalAnalysis />;
-        case 'photo-docs':
-          return <PhotoDocumentation />;
+          return <IntegratedAssessment />;
         case 'progress':
           return <ProgressReports />;
         case 'workouts':
