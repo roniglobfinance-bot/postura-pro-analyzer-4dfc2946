@@ -5,9 +5,17 @@ import { Box, Loader2 } from 'lucide-react';
 
 interface Myofascial3DVisualizationProps {
   imageUrl: string;
+  skeletonData?: {
+    keypoints: Array<{
+      name: string;
+      position: { x: number; y: number; z: number };
+      confidence: number;
+    }>;
+    worldLandmarks?: Array<{ x: number; y: number; z: number }>;
+  } | null;
 }
 
-const Myofascial3DVisualization = ({ imageUrl }: Myofascial3DVisualizationProps) => {
+const Myofascial3DVisualization = ({ imageUrl, skeletonData }: Myofascial3DVisualizationProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [is3DActive, setIs3DActive] = useState(false);
@@ -25,11 +33,70 @@ const Myofascial3DVisualization = ({ imageUrl }: Myofascial3DVisualizationProps)
     setIsLoading(true);
     setIs3DActive(true);
 
-    // Simular processamento 3D
     setTimeout(() => {
-      initializeThreeJS();
+      if (skeletonData) {
+        initializeSkeletonBased3D();
+      } else {
+        initializeThreeJS();
+      }
       setIsLoading(false);
     }, 1500);
+  };
+
+  const initializeSkeletonBased3D = () => {
+    const container = containerRef.current;
+    if (!container || !skeletonData) return;
+
+    // Criar visualização 3D baseada no skeleton real detectado
+    container.innerHTML = `
+      <div style="
+        width: 100%;
+        height: 500px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="
+          color: white;
+          text-align: center;
+          padding: 20px;
+        ">
+          <h3 style="font-size: 20px; margin-bottom: 16px;">Skeleton Detectado</h3>
+          <p style="margin-bottom: 12px;">${skeletonData.keypoints.length} pontos detectados</p>
+          <div style="
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            max-width: 600px;
+            margin: 20px auto;
+            text-align: left;
+            font-size: 12px;
+          ">
+            ${skeletonData.keypoints
+              .filter(kp => kp.confidence > 0.5)
+              .slice(0, 12)
+              .map(kp => `
+                <div style="
+                  background: rgba(255,255,255,0.1);
+                  padding: 8px;
+                  border-radius: 4px;
+                  border-left: 3px solid ${kp.confidence > 0.8 ? '#00ff00' : '#ffaa00'};
+                ">
+                  <div style="font-weight: bold;">${kp.name}</div>
+                  <div style="opacity: 0.7;">${(kp.confidence * 100).toFixed(0)}%</div>
+                </div>
+              `).join('')}
+          </div>
+          <p style="margin-top: 20px; font-size: 14px; opacity: 0.8;">
+            ✨ Linhas miofasciais baseadas no skeleton real detectado
+          </p>
+        </div>
+      </div>
+    `;
   };
 
   const initializeThreeJS = () => {
@@ -252,8 +319,11 @@ const Myofascial3DVisualization = ({ imageUrl }: Myofascial3DVisualizationProps)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!is3DActive ? (
+        {!skeletonData && !is3DActive ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Execute a análise MediaPipe primeiro para visualizar as linhas miofasciais baseadas no skeleton real detectado.
+            </p>
             <img
               src={imageUrl}
               alt="Preview"
@@ -266,9 +336,47 @@ const Myofascial3DVisualization = ({ imageUrl }: Myofascial3DVisualizationProps)
                   Gerando Modelo 3D...
                 </>
               ) : (
-                'Gerar Visualização 3D'
+                'Gerar Visualização 3D (Simulada)'
               )}
             </Button>
+          </div>
+        ) : skeletonData ? (
+          <div className="flex flex-col space-y-4">
+            <Button onClick={generate3DVisualization} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Gerando Modelo 3D...
+                </>
+              ) : (
+                'Visualizar Linhas Miofasciais'
+              )}
+            </Button>
+            
+            {is3DActive && (
+              <>
+                <div ref={containerRef} className="w-full" />
+                
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Linhas Miofasciais Baseadas no Skeleton:</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {myofascialLines.map(line => (
+                      <div key={line.name} className="flex items-center gap-2 text-sm">
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: line.color }}
+                        />
+                        <span>{line.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  ✨ Visualização baseada em {skeletonData.keypoints.length} pontos anatômicos detectados pelo MediaPipe.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <>

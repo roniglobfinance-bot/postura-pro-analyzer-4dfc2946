@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   User, Camera, Scan, Brain, FileText, 
-  Upload, Save, Download 
+  Upload, Save, Download, Loader2, Sparkles, AlertCircle 
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAssessment } from '@/contexts/AssessmentContext';
@@ -19,7 +20,7 @@ import FlagSelector from './diagnostic/FlagSelector';
 import DiagnosticResults from './diagnostic/DiagnosticResults';
 import ProtocolViewer from './diagnostic/ProtocolViewer';
 import { generateDiagnosticReport } from '@/services/diagnosticEngine';
-import { convertAnalysisToFlags, deduplicateFlags, enrichFlags } from '@/services/flagConversionService';
+import { analyzePoseComplete, extractSkeletonForVisualization } from '@/services/mediaPipePoseService';
 
 const IntegratedAssessment = () => {
   const { 
@@ -27,12 +28,16 @@ const IntegratedAssessment = () => {
     updateClientData, 
     updatePhoto, 
     addDiagnosticFlag,
-    setDiagnosis 
+    setDiagnosis,
+    addAnatomicalPoints,
+    addMeasurement
   } = useAssessment();
   
   const [activeTab, setActiveTab] = useState('client');
   const [selectedView, setSelectedView] = useState<'anterior' | 'posterior' | 'lateralDireita' | 'lateralEsquerda'>('anterior');
   const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysisResults, setAiAnalysisResults] = useState<Record<string, any>>({});
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,6 +52,99 @@ const IntegratedAssessment = () => {
         });
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRunAIAnalysis = async () => {
+    if (!data.photos || Object.keys(data.photos).length === 0) {
+      toast({
+        title: "Nenhuma foto disponível",
+        description: "Capture fotos antes de executar a análise de IA",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    toast({
+      title: "Iniciando Análise MediaPipe",
+      description: "Processando imagens com detecção automática de 33 keypoints...",
+    });
+
+    try {
+      let allFlags: any[] = [];
+      let allMeasurements: any[] = [];
+      
+      // Processar cada foto com análise completa
+      const photoViews = Object.entries(data.photos).filter(([_, url]) => url);
+      
+      for (const [viewType, imageUrl] of photoViews) {
+        console.log(`Analisando foto: ${viewType}`);
+        
+        const analysisResult = await analyzePoseComplete(
+          imageUrl,
+          viewType as any,
+          data.clientData.height
+        );
+        
+        if (analysisResult.pose) {
+          // 1. Adicionar pontos anatômicos detectados (33 keypoints)
+          addAnatomicalPoints(viewType as any, analysisResult.pose.keypoints.map(kp => ({
+            id: `mp-${Date.now()}-${Math.random()}`,
+            name: kp.name,
+            x: kp.x,
+            y: kp.y,
+            type: 'landmark' as const
+          })));
+
+          // 2. Armazenar flags detectados
+          allFlags.push(...analysisResult.flags);
+          
+          // 3. Armazenar medições
+          allMeasurements.push(...analysisResult.measurements);
+          
+          // 4. Extrair skeleton para visualização 3D
+          const skeletonData = extractSkeletonForVisualization(analysisResult.pose);
+          if (skeletonData) {
+            setAiAnalysisResults(prev => ({
+              ...prev,
+              [viewType]: {
+                skeleton: skeletonData,
+                deviations: analysisResult.deviations,
+                summary: analysisResult.clinicalSummary
+              }
+            }));
+          }
+        }
+      }
+
+      // 5. Adicionar todas as flags ao contexto (deduplicated)
+      const uniqueFlags = Array.from(
+        new Map(allFlags.map(f => [f.code, f])).values()
+      );
+      
+      uniqueFlags.forEach(flag => addDiagnosticFlag(flag));
+      
+      // 6. Adicionar medições
+      allMeasurements.forEach(m => addMeasurement(m));
+
+      toast({
+        title: "Análise MediaPipe Concluída!",
+        description: `${uniqueFlags.length} flags detectados, ${allMeasurements.length} medições realizadas`,
+      });
+      
+      console.log('Flags detectados:', uniqueFlags);
+      console.log('Medições:', allMeasurements);
+      
+    } catch (error) {
+      console.error('Erro na análise MediaPipe:', error);
+      toast({
+        title: "Erro na análise",
+        description: error instanceof Error ? error.message : "Não foi possível completar a análise de IA",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -231,13 +329,49 @@ const IntegratedAssessment = () => {
 
         {/* 3. ANÁLISES DE IA */}
         <TabsContent value="analysis" className="space-y-4">
-          {!currentPhoto ? (
-            <Card>
-              <CardContent className="p-12 text-center text-muted-foreground">
-                Faça upload de uma foto para habilitar as análises de IA
-              </CardContent>
-            </Card>
-          ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Análise Automática com MediaPipe</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Detecta automaticamente 33 pontos anatômicos, calcula medições precisas, 
+                identifica desvios posturais e gera flags de diagnóstico baseados em deep learning.
+              </p>
+              
+              <Button
+                onClick={handleRunAIAnalysis}
+                disabled={isAnalyzing || !Object.keys(data.photos).some(k => data.photos[k as keyof typeof data.photos])}
+                className="w-full"
+                size="lg"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Analisando com MediaPipe...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Análise MediaPipe (33 Keypoints)
+                  </>
+                )}
+              </Button>
+              
+              {data.diagnosticFlags.length > 0 && (
+                <Alert className="mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>{data.diagnosticFlags.length} flags</strong> detectados automaticamente pela IA.
+                    Veja a aba "Flags" para revisar e "Diagnóstico" para processar.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Visualizações adicionais */}
+          {currentPhoto && (
             <Tabs defaultValue="skeleton" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="skeleton">Esqueleto</TabsTrigger>
@@ -249,8 +383,7 @@ const IntegratedAssessment = () => {
                 <SkeletonDetection
                   imageUrl={currentPhoto}
                   onAnalysisComplete={(analysis) => {
-                    // Auto-detectar flags baseado na análise
-                    // Implementar lógica de conversão de análise -> flags
+                    console.log('Análise de skeleton concluída:', analysis);
                   }}
                 />
               </TabsContent>
@@ -260,7 +393,18 @@ const IntegratedAssessment = () => {
               </TabsContent>
 
               <TabsContent value="myofascial" className="space-y-4">
-                <Myofascial3DVisualization imageUrl={currentPhoto} />
+                {aiAnalysisResults[selectedView]?.skeleton ? (
+                  <Myofascial3DVisualization 
+                    imageUrl={currentPhoto}
+                    skeletonData={aiAnalysisResults[selectedView].skeleton}
+                  />
+                ) : (
+                  <Card>
+                    <CardContent className="p-8 text-center text-muted-foreground">
+                      Execute a análise MediaPipe primeiro para visualizar linhas miofasciais em 3D
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
             </Tabs>
           )}

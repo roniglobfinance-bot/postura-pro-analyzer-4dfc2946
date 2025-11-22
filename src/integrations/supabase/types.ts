@@ -404,24 +404,24 @@ export type Database = {
           success: boolean
         }[]
       }
-      add_user_role: {
-        Args:
-          | {
+      add_user_role:
+        | {
+            Args: { new_role: string; target_user_id: string }
+            Returns: boolean
+          }
+        | {
+            Args: {
               additional_permissions?: string[]
               new_role: string
               target_user_id: string
             }
-          | { new_role: string; target_user_id: string }
-        Returns: boolean
-      }
+            Returns: boolean
+          }
       add_user_role_simple: {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
       }
-      can_perform_action: {
-        Args: { required_role: string }
-        Returns: boolean
-      }
+      can_perform_action: { Args: { required_role: string }; Returns: boolean }
       create_evaluation: {
         Args: { p_student_id?: string; p_title: string }
         Returns: {
@@ -466,18 +466,9 @@ export type Database = {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
       }
-      is_student: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_teacher: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_user_role: {
-        Args: { check_role: string }
-        Returns: boolean
-      }
+      is_student: { Args: { user_id?: string }; Returns: boolean }
+      is_teacher: { Args: { user_id?: string }; Returns: boolean }
+      is_user_role: { Args: { check_role: string }; Returns: boolean }
       remove_user_role: {
         Args: { role_to_remove: string; target_user_id: string }
         Returns: boolean
