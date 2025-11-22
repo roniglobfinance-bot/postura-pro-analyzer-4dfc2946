@@ -2,12 +2,13 @@ import { DiagnosticFlag } from '@/contexts/AssessmentContext';
 import { evaluationFlags } from '@/data/knowledgeBase';
 
 export interface AnalysisResult {
-  type: 'skeleton' | 'angle' | 'measurement' | 'pose';
+  type: 'skeleton' | 'angle' | 'measurement' | 'pose' | 'deviation';
   findings: {
     name: string;
     value: number;
     severity: number;
     reference?: string;
+    angle?: number;
   }[];
 }
 
@@ -33,12 +34,13 @@ function matchFindingToFlags(finding: {
   value: number;
   severity: number;
   reference?: string;
+  angle?: number;
 }): DiagnosticFlag[] {
   const flags: DiagnosticFlag[] = [];
   const name = finding.name.toLowerCase();
   
-  // POSTURAIS ESTÁTICOS
-  if (name.includes('cabeça') && name.includes('anterior')) {
+  // POSTURAIS ESTÁTICOS - CABEÇA E PESCOÇO
+  if (name.includes('anteriorização') && name.includes('cabeça')) {
     flags.push({
       code: 'PEP01',
       name: 'Anteriorização de Cabeça',
@@ -48,7 +50,21 @@ function matchFindingToFlags(finding: {
     });
   }
   
-  if (name.includes('ombro') && (name.includes('desnível') || name.includes('elevado'))) {
+  if (name.includes('ombro') && name.includes('elevado')) {
+    // Determinar lado
+    const isRight = name.includes(' d') || name.includes('direito');
+    const isLeft = name.includes(' e') || name.includes('esquerdo');
+    
+    flags.push({
+      code: 'PEP02',
+      name: `Ombro Elevado ${isRight ? 'D' : isLeft ? 'E' : ''}`.trim(),
+      severity: finding.severity,
+      source: 'auto-detected',
+      confidence: 92
+    });
+  }
+  
+  if (name.includes('desnível') && name.includes('ombro')) {
     flags.push({
       code: 'PEP02',
       name: 'Ombro Elevado/Desnivelado',
@@ -118,7 +134,20 @@ function matchFindingToFlags(finding: {
     });
   }
   
-  if (name.includes('quadril') && (name.includes('desnível') || name.includes('rotação'))) {
+  if (name.includes('desnível') && name.includes('quadril')) {
+    const isRight = name.includes(' d') || name.includes('direito');
+    const isLeft = name.includes(' e') || name.includes('esquerdo');
+    
+    flags.push({
+      code: 'PEP09',
+      name: `Desnível de Quadril ${isRight ? 'D' : isLeft ? 'E' : ''}`.trim(),
+      severity: finding.severity,
+      source: 'auto-detected',
+      confidence: 88
+    });
+  }
+  
+  if (name.includes('assimetria') && name.includes('quadril')) {
     flags.push({
       code: 'PEP09',
       name: 'Assimetria de Quadril',
@@ -128,23 +157,29 @@ function matchFindingToFlags(finding: {
     });
   }
   
-  if (name.includes('joelho') && name.includes('valgo')) {
+  if (name.includes('genu') && name.includes('valgo')) {
+    const isRight = name.includes(' d') || name.includes('direito');
+    const isLeft = name.includes(' e') || name.includes('esquerdo');
+    
     flags.push({
       code: 'PEP10',
-      name: 'Genu Valgo',
+      name: `Genu Valgo ${isRight ? 'D' : isLeft ? 'E' : ''}`.trim(),
       severity: finding.severity,
       source: 'auto-detected',
-      confidence: 90
+      confidence: 93
     });
   }
   
-  if (name.includes('joelho') && name.includes('varo')) {
+  if (name.includes('genu') && name.includes('varo')) {
+    const isRight = name.includes(' d') || name.includes('direito');
+    const isLeft = name.includes(' e') || name.includes('esquerdo');
+    
     flags.push({
       code: 'PEP11',
-      name: 'Genu Varo',
+      name: `Genu Varo ${isRight ? 'D' : isLeft ? 'E' : ''}`.trim(),
       severity: finding.severity,
       source: 'auto-detected',
-      confidence: 90
+      confidence: 93
     });
   }
   
