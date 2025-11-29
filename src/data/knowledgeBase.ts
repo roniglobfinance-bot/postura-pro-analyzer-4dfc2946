@@ -217,81 +217,426 @@ export const diagnosticRules = [
   }
 ];
 
-// PARTE 4: PROTOCOLOS DE INTERVENÇÃO - Outputs de Correção
+// PARTE 4: PROTOCOLOS DE INTERVENÇÃO - Sistema 9FIT OS
 export const interventionProtocols = {
-  PROTOCOLO_CONDRO: {
-    id: 'PROTOCOLO_CONDRO',
-    name: 'Protocolo Condromalácia Patelar',
-    duration: '12-16 semanas',
+  // PROTOCOLO 1 - Ombro Anteriorizado (Slide Umeral Anterior)
+  PROTOCOLO_OMBRO_ANTERIOR: {
+    id: 'PROTOCOLO_OMBRO_ANTERIOR',
+    name: 'Protocolo Ombro Anteriorizado - Slide Umeral',
+    duration: '8-10 semanas',
     phases: [
       {
-        name: 'Fase 1 - Liberação e Alívio (Semanas 1-4)',
+        name: 'Fase 1 - Liberação Miofascial',
         blocks: [
           {
             type: 'liberacao',
             exercises: [
-              { name: 'Liberação Miofascial TFL', sets: 3, reps: '60s', tool: 'foam roller' },
-              { name: 'Liberação Quadríceps', sets: 3, reps: '60s', tool: 'foam roller' },
-              { name: 'Liberação Gastrocnêmio', sets: 2, reps: '45s', tool: 'bola' }
-            ]
-          },
-          {
-            type: 'alongamento',
-            exercises: [
-              { name: 'Alongamento TFL', sets: 3, reps: '30s', intensity: 'leve' },
-              { name: 'Alongamento Quadríceps', sets: 3, reps: '30s', intensity: 'leve' }
-            ]
-          },
-          {
-            type: 'ativacao',
-            exercises: [
-              { name: 'Glúteo Médio Isométrico', sets: 3, reps: '20s', load: 'corporal' },
-              { name: 'Clamshell', sets: 3, reps: 15, load: 'elástico leve' }
+              { name: 'Liberação Peitoral Menor com bola', sets: 3, reps: '60s por lado', tool: 'bola de lacrosse' },
+              { name: 'Liberação Deltoide Anterior', sets: 2, reps: '45s por lado', tool: 'foam roller' }
             ]
           }
         ]
       },
       {
-        name: 'Fase 2 - Fortalecimento (Semanas 5-10)',
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Rotação Externa com Banda (Infraespinal/Redondo Menor)', sets: 3, reps: 15, load: 'elástico leve' },
+              { name: 'No Money Drill', sets: 3, reps: 12, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade e Integração',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'Retração Escapular Consciente (Wall Slides)', sets: 3, reps: 12, load: 'corporal' },
+              { name: 'Y-T-W Raises', sets: 3, reps: '10 de cada', load: 'leve' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Fortalecimento',
         blocks: [
           {
             type: 'fortalecimento',
             exercises: [
-              { name: 'Agachamento com Feedback', sets: 4, reps: 12, load: 'progressivo' },
-              { name: 'Step-up Lateral', sets: 3, reps: '10/lado', load: 'halteres' },
-              { name: 'Monster Walk', sets: 3, reps: '12/lado', load: 'elástico médio' },
-              { name: 'Ponte Unilateral', sets: 3, reps: '12/lado', load: 'progressivo' }
+              { name: 'Face Pulls', sets: 4, reps: 15, load: 'progressivo' },
+              { name: 'Remada Baixa com Pronação', sets: 4, reps: 12, load: 'progressivo' }
             ]
           }
         ]
       },
       {
-        name: 'Fase 3 - Reorganização Funcional (Semanas 11-16)',
+        name: 'Fase 5 - Alongamento Final',
         blocks: [
           {
-            type: 'funcional',
+            type: 'alongamento',
             exercises: [
-              { name: 'Salto Vertical com Controle', sets: 4, reps: 10, load: 'corporal' },
-              { name: 'Aterrissagem Unilateral', sets: 3, reps: '8/lado', load: 'progressivo' },
-              { name: 'Corrida com Correção', duration: '15-20min', intensity: 'moderada' }
+              { name: 'Alongamento Peitoral em Porta', sets: 3, reps: '40s', intensity: 'moderado' }
             ]
           }
         ]
       }
     ]
   },
-  PROTOCOLO_LOMBALGIA: {
-    id: 'PROTOCOLO_LOMBALGIA',
-    name: 'Protocolo Lombalgia Crônica',
+
+  // PROTOCOLO 2 - Hipercifose Torácica
+  PROTOCOLO_HIPERCIFOSE: {
+    id: 'PROTOCOLO_HIPERCIFOSE',
+    name: 'Protocolo Hipercifose Torácica - Bloqueio Estrutural',
+    duration: '10-12 semanas',
+    phases: [
+      {
+        name: 'Fase 1 - Liberação',
+        blocks: [
+          {
+            type: 'liberacao',
+            exercises: [
+              { name: 'Mobilização Torácica no Foam Roller', sets: 3, reps: '8-10 repetições', tool: 'foam roller' },
+              { name: 'Liberação Latíssimo', sets: 2, reps: '60s por lado', tool: 'bola' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Prone Cobra', sets: 3, reps: 12, load: 'corporal' },
+              { name: 'Wall Angels', sets: 3, reps: 10, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'Y-Raises em Prancha Inclinada', sets: 3, reps: 12, load: 'leve' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Força',
+        blocks: [
+          {
+            type: 'fortalecimento',
+            exercises: [
+              { name: 'Zercher Carry', sets: 3, duration: '30-40s', load: 'moderado' },
+              { name: 'Extensões Torácicas no Banco', sets: 4, reps: 15, load: 'progressivo' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 5 - Alongamento',
+        blocks: [
+          {
+            type: 'alongamento',
+            exercises: [
+              { name: 'Prece Estendida', sets: 3, reps: '45s', intensity: 'moderado' },
+              { name: 'Gato-Vaca', sets: 3, reps: 10, intensity: 'mobilidade' }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // PROTOCOLO 3 - Anteversão Pélvica / Hiperlordose
+  PROTOCOLO_ANTEVERSAO: {
+    id: 'PROTOCOLO_ANTEVERSAO',
+    name: 'Protocolo Anteversão Pélvica - Sobrecarga Facetária',
     duration: '10-14 semanas',
     phases: [
       {
-        name: 'Fase 1 - Respiração e Liberação (Semanas 1-3)',
+        name: 'Fase 1 - Liberação',
+        blocks: [
+          {
+            type: 'liberacao',
+            exercises: [
+              { name: 'Liberação Psoas (bola)', sets: 3, reps: '90s por lado', tool: 'bola' },
+              { name: 'Liberação Quadrado Lombar', sets: 2, reps: '60s por lado', tool: 'bola' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Dead Bug', sets: 3, reps: '10 por lado', load: 'corporal' },
+              { name: 'Posterior Pelvic Tilt Consciente', sets: 3, reps: 12, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade Core',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'Respiração 360° (Diafragmática)', sets: 4, reps: '8 ciclos', position: 'decúbito' },
+              { name: 'Prancha Anti-Extensão (RKC)', sets: 3, duration: '30-45s', load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Força',
+        blocks: [
+          {
+            type: 'fortalecimento',
+            exercises: [
+              { name: 'Hip Thrust', sets: 4, reps: 12, load: 'progressivo' },
+              { name: 'Prancha com Protração Escapular', sets: 3, duration: '40s', load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 5 - Alongamento',
+        blocks: [
+          {
+            type: 'alongamento',
+            exercises: [
+              { name: 'Alongamento Flexores do Quadril (meio ajoelhado)', sets: 3, reps: '45s por lado', intensity: 'moderado' }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // PROTOCOLO 4 - Valgo Dinâmico / Condromalácia
+  PROTOCOLO_VALGO_CONDRO: {
+    id: 'PROTOCOLO_VALGO_CONDRO',
+    name: 'Protocolo Valgo Dinâmico - Síndrome Femoropatelar',
+    duration: '12-16 semanas',
+    phases: [
+      {
+        name: 'Fase 1 - Liberação',
+        blocks: [
+          {
+            type: 'liberacao',
+            exercises: [
+              { name: 'Liberação TFL', sets: 3, reps: '60s por lado', tool: 'foam roller' },
+              { name: 'Liberação Adutores', sets: 2, reps: '60s por lado', tool: 'foam roller' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Clamshell (Glúteo Médio)', sets: 3, reps: 15, load: 'elástico leve' },
+              { name: 'VMO Isométrico (Terminal Extension)', sets: 3, reps: '20s', load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'RNT Squat (Reactive Neuromuscular Training)', sets: 3, reps: 10, load: 'elástico' },
+              { name: 'Drill de Alinhamento do Joelho (espelho)', sets: 3, reps: 12, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Força',
+        blocks: [
+          {
+            type: 'fortalecimento',
+            exercises: [
+              { name: 'Agachamento Búlgaro', sets: 4, reps: '10 por lado', load: 'progressivo' },
+              { name: 'Passada Lateral com Resistência', sets: 3, reps: '12 por lado', load: 'halteres' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 5 - Alongamento',
+        blocks: [
+          {
+            type: 'alongamento',
+            exercises: [
+              { name: 'Alongamento Glúteo (Figura 4)', sets: 3, reps: '40s por lado', intensity: 'moderado' }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // PROTOCOLO 5 - Cabeça Protusa (Síndrome Cruzada Superior - Cervical)
+  PROTOCOLO_CABECA_PROTUSA: {
+    id: 'PROTOCOLO_CABECA_PROTUSA',
+    name: 'Protocolo Cabeça Protusa - Síndrome Cruzada Superior Cervical',
+    duration: '8-12 semanas',
+    phases: [
+      {
+        name: 'Fase 1 - Liberação',
+        blocks: [
+          {
+            type: 'liberacao',
+            exercises: [
+              { name: 'Liberação Suboccipitais (bola de tênis)', sets: 3, reps: '60s', tool: 'bola' },
+              { name: 'Liberação Trapézio Superior', sets: 2, reps: '45s por lado', tool: 'mãos' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Chin Tucks (Retrações Cervicais)', sets: 3, reps: 15, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'Alinhamento Cervical contra Parede', sets: 3, duration: '30s', load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Força',
+        blocks: [
+          {
+            type: 'fortalecimento',
+            exercises: [
+              { name: 'Farmer Walk (Postura)', sets: 3, duration: '40s', load: 'moderado' },
+              { name: 'Face Pull Superior (Cervical)', sets: 4, reps: 15, load: 'progressivo' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 5 - Alongamento',
+        blocks: [
+          {
+            type: 'alongamento',
+            exercises: [
+              { name: 'Alongamento ECOM', sets: 3, reps: '30s por lado', intensity: 'leve' },
+              { name: 'Alongamento Peitoral em Porta', sets: 3, reps: '40s', intensity: 'moderado' }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // PROTOCOLO 6 - Pronação do Pé
+  PROTOCOLO_PE_PRONADO: {
+    id: 'PROTOCOLO_PE_PRONADO',
+    name: 'Protocolo Pronação do Pé - Insuficiência do Arco Plantar',
+    duration: '8-10 semanas',
+    phases: [
+      {
+        name: 'Fase 1 - Liberação',
+        blocks: [
+          {
+            type: 'liberacao',
+            exercises: [
+              { name: 'Liberação Fáscia Plantar (bola)', sets: 3, reps: '90s por pé', tool: 'bola' },
+              { name: 'Liberação Fibulares', sets: 2, reps: '60s por lado', tool: 'foam roller' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 2 - Pré-Ativação',
+        blocks: [
+          {
+            type: 'ativacao',
+            exercises: [
+              { name: 'Short Foot (Ativação do Arco)', sets: 3, reps: '15 contrações', load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 3 - Estabilidade',
+        blocks: [
+          {
+            type: 'estabilidade',
+            exercises: [
+              { name: 'Elevação de Panturrilha com Bola entre Tornozelos', sets: 3, reps: 15, load: 'corporal' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 4 - Força',
+        blocks: [
+          {
+            type: 'fortalecimento',
+            exercises: [
+              { name: 'Stiff Unipodal', sets: 3, reps: '10 por perna', load: 'progressivo' },
+              { name: 'Panturrilha Sentado (Tibial Posterior)', sets: 4, reps: 15, load: 'progressivo' }
+            ]
+          }
+        ]
+      },
+      {
+        name: 'Fase 5 - Alongamento',
+        blocks: [
+          {
+            type: 'alongamento',
+            exercises: [
+              { name: 'Alongamento Gastrocnêmio', sets: 3, reps: '40s por lado', intensity: 'moderado' }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  // PROTOCOLO LOMBALGIA (mantido do sistema anterior)
+  PROTOCOLO_LOMBALGIA: {
+    id: 'PROTOCOLO_LOMBALGIA',
+    name: 'Protocolo Lombalgia Crônica - LPA',
+    duration: '10-14 semanas',
+    phases: [
+      {
+        name: 'Fase 1 - Respiração e Liberação',
         blocks: [
           {
             type: 'respiracao',
             exercises: [
-              { name: 'Respiração Diafragmática', sets: 4, reps: '8 ciclos', position: 'decúbito dorsal' },
+              { name: 'Respiração Diafragmática 360°', sets: 4, reps: '8 ciclos', position: 'decúbito dorsal' },
               { name: 'Respiração 90/90', sets: 3, reps: '10 ciclos', position: '90/90' }
             ]
           },

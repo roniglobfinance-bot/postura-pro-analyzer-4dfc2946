@@ -21,6 +21,7 @@ import DiagnosticResults from './diagnostic/DiagnosticResults';
 import ProtocolViewer from './diagnostic/ProtocolViewer';
 import { generateDiagnosticReport } from '@/services/diagnosticEngine';
 import { analyzePoseComplete, extractSkeletonForVisualization } from '@/services/mediaPipePoseService';
+import { PDFReportGenerator } from '@/services/pdfReportGenerator';
 
 const IntegratedAssessment = () => {
   const { 
@@ -38,6 +39,7 @@ const IntegratedAssessment = () => {
   const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisResults, setAiAnalysisResults] = useState<Record<string, any>>({});
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -100,8 +102,11 @@ const IntegratedAssessment = () => {
           // 2. Armazenar flags detectados
           allFlags.push(...analysisResult.flags);
           
-          // 3. Armazenar medições
-          allMeasurements.push(...analysisResult.measurements);
+          // 3. Armazenar medições (com viewType)
+          allMeasurements.push(...analysisResult.measurements.map((m: any) => ({
+            ...m,
+            viewType
+          })));
           
           // 4. Extrair skeleton para visualização 3D
           const skeletonData = extractSkeletonForVisualization(analysisResult.pose);
@@ -187,6 +192,84 @@ const IntegratedAssessment = () => {
     });
     
     setActiveTab('diagnosis');
+  };
+
+  const handleGeneratePDFReport = async () => {
+    if (!data.diagnosis || data.diagnosis.diagnoses.length === 0) {
+      toast({
+        title: 'Diagnóstico necessário',
+        description: 'Processe o diagnóstico antes de gerar o relatório PDF',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    toast({
+      title: "Gerando Relatório PDF",
+      description: "Compilando dados, fotos, medições e protocolos...",
+    });
+
+    try {
+      const pdfGenerator = new PDFReportGenerator();
+
+      // Preparar dados das fotos
+      const photos = Object.entries(data.photos)
+        .filter(([_, url]) => url)
+        .map(([view, imageUrl]) => ({
+          id: `photo-${view}`,
+          view,
+          imageUrl
+        }));
+
+      // Preparar medições
+      const measurements = data.measurements.map(m => ({
+        name: m.name,
+        value: m.value,
+        unit: m.unit,
+        viewType: m.viewType
+      }));
+
+      // Preparar dados do relatório
+      const reportData = {
+        clientData: {
+          name: data.clientData.fullName,
+          height: data.clientData.height,
+          age: data.clientData.age,
+          weight: data.clientData.weight,
+          complaints: data.clientData.complaints
+        },
+        photos,
+        measurements,
+        diagnosticFlags: data.diagnosticFlags.map(f => ({
+          code: f.code,
+          name: f.name,
+          confidence: f.confidence || 85
+        })),
+        diagnoses: data.diagnosis.diagnoses,
+        protocols: data.diagnosis.protocols,
+        aiAnalysis: data.aiAnalysis.overallScore ? {
+          overallScore: data.aiAnalysis.overallScore,
+          identifiedPatterns: data.aiAnalysis.identifiedPatterns || []
+        } : undefined
+      };
+
+      await pdfGenerator.generate(reportData);
+
+      toast({
+        title: "Relatório PDF Gerado!",
+        description: "Relatório completo 9FIT OS foi baixado com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast({
+        title: "Erro ao Gerar PDF",
+        description: "Não foi possível gerar o relatório. Verifique os dados.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const currentPhoto = data.photos[selectedView];
@@ -486,6 +569,43 @@ const IntegratedAssessment = () => {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Botão Gerar Relatório PDF Completo */}
+              <Card className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 border-2 border-blue-200 dark:border-blue-800">
+                <CardContent className="p-6">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-blue-600 p-3 rounded-lg">
+                        <Download className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-foreground">Relatório Completo 9FIT OS</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Fotos anotadas, medições, diagnósticos biomecânicos e protocolos de exercícios
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleGeneratePDFReport}
+                      disabled={isGeneratingPDF}
+                      size="lg"
+                      className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white shadow-lg"
+                    >
+                      {isGeneratingPDF ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Gerando PDF...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-5 w-5 mr-2" />
+                          Baixar Relatório PDF
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </>
           ) : (
             <Card>

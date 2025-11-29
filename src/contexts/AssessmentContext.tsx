@@ -15,6 +15,7 @@ export interface PosturalMeasurement {
   unit: string;
   reference: string;
   deviation: number;
+  viewType: string;
 }
 
 export interface DiagnosticFlag {
@@ -32,6 +33,7 @@ export interface SharedAssessmentData {
     age: number;
     height: number;
     weight: number;
+    complaints?: string;
   };
   
   // Imagens e Fotos
@@ -56,6 +58,8 @@ export interface SharedAssessmentData {
     skeletonDetection?: any;
     angleAnalysis?: any;
     myofascialLines?: any;
+    overallScore?: number;
+    identifiedPatterns?: any[];
   };
   
   // Diagnóstico Gerado
