@@ -22,6 +22,7 @@ import ProtocolViewer from './diagnostic/ProtocolViewer';
 import { generateDiagnosticReport } from '@/services/diagnosticEngine';
 import { analyzePoseComplete, extractSkeletonForVisualization } from '@/services/mediaPipePoseService';
 import { PDFReportGenerator } from '@/services/pdfReportGenerator';
+import { SymmetryVisualization } from './reports/SymmetryVisualization';
 
 const IntegratedAssessment = () => {
   const { 
@@ -40,6 +41,7 @@ const IntegratedAssessment = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisResults, setAiAnalysisResults] = useState<Record<string, any>>({});
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [viewValidations, setViewValidations] = useState<Record<string, any>>({});
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,7 +92,23 @@ const IntegratedAssessment = () => {
         );
         
         if (analysisResult.pose) {
-          // 1. Adicionar pontos anatômicos detectados (33 keypoints)
+          // 1. Validação de vista
+          if (analysisResult.viewValidation) {
+            setViewValidations(prev => ({
+              ...prev,
+              [viewType]: analysisResult.viewValidation
+            }));
+            
+            if (!analysisResult.viewValidation.isCorrect) {
+              toast({
+                title: "Foto em vista incorreta!",
+                description: analysisResult.viewValidation.errorMessage,
+                variant: "destructive"
+              });
+            }
+          }
+          
+          // 2. Adicionar pontos anatômicos detectados (33 keypoints)
           addAnatomicalPoints(viewType as any, analysisResult.pose.keypoints.map(kp => ({
             id: `mp-${Date.now()}-${Math.random()}`,
             name: kp.name,
@@ -99,16 +117,16 @@ const IntegratedAssessment = () => {
             type: 'landmark' as const
           })));
 
-          // 2. Armazenar flags detectados
+          // 3. Armazenar flags detectados
           allFlags.push(...analysisResult.flags);
           
-          // 3. Armazenar medições (com viewType)
+          // 4. Armazenar medições (com viewType)
           allMeasurements.push(...analysisResult.measurements.map((m: any) => ({
             ...m,
             viewType
           })));
           
-          // 4. Extrair skeleton para visualização 3D
+          // 5. Extrair skeleton para visualização 3D
           const skeletonData = extractSkeletonForVisualization(analysisResult.pose);
           if (skeletonData) {
             setAiAnalysisResults(prev => ({
@@ -116,7 +134,9 @@ const IntegratedAssessment = () => {
               [viewType]: {
                 skeleton: skeletonData,
                 deviations: analysisResult.deviations,
-                summary: analysisResult.clinicalSummary
+                summary: analysisResult.clinicalSummary,
+                symmetryAnalysis: analysisResult.symmetryAnalysis,
+                viewValidation: analysisResult.viewValidation
               }
             }));
           }
@@ -452,13 +472,38 @@ const IntegratedAssessment = () => {
               )}
             </CardContent>
           </Card>
+          
+          {/* Validação de Vista */}
+          {viewValidations[selectedView] && !viewValidations[selectedView].isCorrect && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-semibold">{viewValidations[selectedView].errorMessage}</p>
+                  {viewValidations[selectedView].recommendations.map((rec: string, idx: number) => (
+                    <p key={idx} className="text-sm">{rec}</p>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {viewValidations[selectedView] && viewValidations[selectedView].isCorrect && (
+            <Alert>
+              <AlertDescription>
+                ✅ Foto validada: Vista {viewValidations[selectedView].detectedView.toUpperCase()} 
+                (Confiança: {viewValidations[selectedView].confidence}%)
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Visualizações adicionais */}
           {currentPhoto && (
             <Tabs defaultValue="skeleton" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="skeleton">Esqueleto</TabsTrigger>
                 <TabsTrigger value="angles">Ângulos</TabsTrigger>
+                <TabsTrigger value="symmetry">Simetria</TabsTrigger>
                 <TabsTrigger value="myofascial">3D Miofascial</TabsTrigger>
               </TabsList>
 
@@ -473,6 +518,21 @@ const IntegratedAssessment = () => {
 
               <TabsContent value="angles" className="space-y-4">
                 <DynamicAngleAnalysis imageUrl={currentPhoto} />
+              </TabsContent>
+              
+              <TabsContent value="symmetry" className="space-y-4">
+                {aiAnalysisResults[selectedView]?.symmetryAnalysis ? (
+                  <SymmetryVisualization 
+                    analysis={aiAnalysisResults[selectedView].symmetryAnalysis}
+                    imageUrl={currentPhoto}
+                  />
+                ) : (
+                  <Card>
+                    <CardContent className="p-8 text-center text-muted-foreground">
+                      Execute a análise MediaPipe primeiro para ver análise de simetria bilateral
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="myofascial" className="space-y-4">
