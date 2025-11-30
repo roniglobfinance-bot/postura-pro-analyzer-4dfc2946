@@ -1,6 +1,8 @@
 import { DetectedPose, detectPoseFromImage, detectPosturalDeviations, getAllKeypoints, getClinicalKeypoints } from './poseDetectionService';
 import { convertAnalysisToFlags, deduplicateFlags, enrichFlags, AnalysisResult } from './flagConversionService';
 import { DiagnosticFlag } from '@/contexts/AssessmentContext';
+import { analyzeSymmetry, SymmetryAnalysis } from './symmetryAnalysisService';
+import { validatePhotoView, ViewValidation } from './viewValidationService';
 
 /**
  * Serviço integrado para processamento completo de pose usando MediaPipe
@@ -22,6 +24,8 @@ export interface PoseAnalysisResult {
     deviation?: number;
   }[];
   clinicalSummary: string;
+  symmetryAnalysis?: SymmetryAnalysis;
+  viewValidation?: ViewValidation;
 }
 
 /**
@@ -44,8 +48,18 @@ export async function analyzePoseComplete(
         deviations: [],
         flags: [],
         measurements: [],
-        clinicalSummary: 'Não foi possível detectar pose na imagem. Certifique-se de que há uma pessoa visível em posição neutra.'
+        clinicalSummary: 'Não foi possível detectar pose na imagem. Certifique-se de que há uma pessoa visível em posição neutra.',
+        symmetryAnalysis: undefined,
+        viewValidation: undefined
       };
+    }
+    
+    // 1.5. Validar vista da foto
+    const viewValidation = validatePhotoView(pose, viewType);
+    console.log(`Validação de vista: ${viewValidation.isCorrect ? 'Correta' : 'Incorreta'} - Confiança: ${viewValidation.confidence}%`);
+    
+    if (!viewValidation.isCorrect) {
+      console.warn(`⚠️ ATENÇÃO: ${viewValidation.errorMessage}`);
     }
     
     // 2. Detectar desvios posturais
@@ -73,15 +87,21 @@ export async function analyzePoseComplete(
     // 4. Calcular medições clínicas
     const measurements = calculateClinicalMeasurements(pose, viewType, clientHeight);
     
+    // 4.5. Análise de simetria bilateral
+    const symmetryAnalysis = analyzeSymmetry(pose, viewType, clientHeight);
+    console.log(`Análise de simetria: Score geral = ${symmetryAnalysis.overallSymmetryScore}%`);
+    
     // 5. Gerar resumo clínico
-    const clinicalSummary = generateClinicalSummary(deviations, flags, measurements);
+    const clinicalSummary = generateClinicalSummary(deviations, flags, measurements, symmetryAnalysis, viewValidation);
     
     return {
       pose,
       deviations,
       flags,
       measurements,
-      clinicalSummary
+      clinicalSummary,
+      symmetryAnalysis,
+      viewValidation
     };
     
   } catch (error) {
@@ -91,7 +111,9 @@ export async function analyzePoseComplete(
       deviations: [],
       flags: [],
       measurements: [],
-      clinicalSummary: `Erro na análise: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      clinicalSummary: `Erro na análise: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+      symmetryAnalysis: undefined,
+      viewValidation: undefined
     };
   }
 }
@@ -270,10 +292,32 @@ function calculateAngle(p1: { x: number; y: number }, p2: { x: number; y: number
 function generateClinicalSummary(
   deviations: any[],
   flags: DiagnosticFlag[],
-  measurements: any[]
+  measurements: any[],
+  symmetryAnalysis?: SymmetryAnalysis,
+  viewValidation?: ViewValidation
 ): string {
+  
+  // Validação de vista primeiro
+  let summary = '';
+  
+  if (viewValidation && !viewValidation.isCorrect) {
+    summary += `⚠️ ERRO DE CAPTURA: ${viewValidation.errorMessage}\n\n`;
+    summary += viewValidation.recommendations.join('\n') + '\n\n';
+    summary += '❌ Análise não pode prosseguir com foto na vista incorreta. Capture novamente.\n';
+    return summary;
+  }
+  
+  if (viewValidation && viewValidation.isCorrect) {
+    summary += `✅ Foto validada: ${viewValidation.detectedView.toUpperCase()} (Confiança: ${viewValidation.confidence}%)\n\n`;
+  }
   if (deviations.length === 0) {
-    return 'Análise postural concluída. Nenhum desvio significativo detectado. Postura dentro dos padrões de normalidade.';
+    summary += 'Análise postural concluída. Nenhum desvio significativo detectado. Postura dentro dos padrões de normalidade.\n\n';
+    
+    if (symmetryAnalysis) {
+      summary += `🎯 Simetria Bilateral: ${symmetryAnalysis.overallSymmetryScore}% - ${symmetryAnalysis.overallSymmetryScore >= 90 ? 'Excelente' : 'Verificar assimetrias'}\n`;
+    }
+    
+    return summary;
   }
   
   const severityCount = {
@@ -282,7 +326,7 @@ function generateClinicalSummary(
     severo: flags.filter(f => f.severity === 3).length
   };
   
-  let summary = `Análise postural concluída com ${deviations.length} desvio(s) detectado(s).\n\n`;
+  summary += `Análise postural concluída com ${deviations.length} desvio(s) detectado(s).\n\n`;
   
   if (severityCount.severo > 0) {
     summary += `⚠️ ATENÇÃO: ${severityCount.severo} desvio(s) severo(s) identificado(s).\n`;
@@ -296,7 +340,28 @@ function generateClinicalSummary(
   
   summary += `\n📊 Total de ${measurements.length} medição(ões) realizada(s).\n`;
   summary += `\n🎯 ${flags.length} flag(s) de diagnóstico gerado(s) automaticamente.\n`;
-  summary += `\nRecomenda-se processar o diagnóstico completo para obter protocolo de correção específico.`;
+  
+  // Adicionar análise de simetria
+  if (symmetryAnalysis) {
+    summary += `\n\n🔍 ANÁLISE DE SIMETRIA BILATERAL:\n`;
+    summary += `Score Geral: ${symmetryAnalysis.overallSymmetryScore}%\n`;
+    
+    if (symmetryAnalysis.overallSymmetryScore < 85) {
+      summary += `⚠️ Assimetrias detectadas:\n`;
+      
+      if (symmetryAnalysis.bilateral.shoulders.symmetryPercentage < 90) {
+        summary += `  • Ombros: ${symmetryAnalysis.bilateral.shoulders.deviationCm}cm (${symmetryAnalysis.bilateral.shoulders.side})\n`;
+      }
+      if (symmetryAnalysis.bilateral.hips.symmetryPercentage < 90) {
+        summary += `  • Quadril: ${symmetryAnalysis.bilateral.hips.deviationCm}cm (${symmetryAnalysis.bilateral.hips.side})\n`;
+      }
+      if (symmetryAnalysis.bilateral.knees.symmetryPercentage < 85) {
+        summary += `  • Joelhos: ${symmetryAnalysis.bilateral.knees.deviationCm}cm\n`;
+      }
+    }
+  }
+  
+  summary += `\n\n✅ Recomenda-se processar o diagnóstico completo para obter protocolo de correção específico.`;
   
   return summary;
 }
