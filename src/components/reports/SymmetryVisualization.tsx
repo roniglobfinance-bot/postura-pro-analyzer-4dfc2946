@@ -128,6 +128,8 @@ export const SymmetryVisualization = ({ analysis, imageUrl }: SymmetryVisualizat
                 />
                 <svg 
                   className="absolute inset-0 w-full h-full pointer-events-none"
+                  viewBox="0 0 1 1"
+                  preserveAspectRatio="none"
                   style={{ mixBlendMode: 'multiply' }}
                 >
                   {analysis.heatmapData.map((point, idx) => (
@@ -135,7 +137,7 @@ export const SymmetryVisualization = ({ analysis, imageUrl }: SymmetryVisualizat
                       key={idx}
                       cx={point.x}
                       cy={point.y}
-                      r="30"
+                      r="0.05"
                       fill={point.color}
                       opacity="0.6"
                     />

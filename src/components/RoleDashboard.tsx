@@ -34,10 +34,15 @@ interface RoleDashboardProps {
 }
 
 const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
-  const [stats, setStats] = useState<any>({});
+  const [stats, setStats] = useState<any>({
+    totalStudents: 0,
+    totalEvaluations: 0,
+    completedEvaluations: 0,
+    pendingEvaluations: 0
+  });
   const [students, setStudents] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [studentEmail, setStudentEmail] = useState('');
   const [isCreateEvalOpen, setIsCreateEvalOpen] = useState(false);
@@ -45,11 +50,20 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
   useEffect(() => {
-    loadDashboardData();
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 5000); // Timeout de segurança
+    
+    loadDashboardData().finally(() => {
+      clearTimeout(timer);
+    });
+    
+    return () => clearTimeout(timer);
   }, [userRole]);
 
   const loadDashboardData = async () => {
     try {
+      setLoading(true);
       if (userRole === 'teacher') {
         await loadTeacherData();
       } else {
@@ -57,28 +71,46 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      // Set default empty data on error
+      setStats({
+        totalStudents: 0,
+        totalEvaluations: 0,
+        completedEvaluations: 0,
+        pendingEvaluations: 0
+      });
+      setStudents([]);
+      setEvaluations([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   const loadTeacherData = async () => {
-    setLoading(true);
     try {
       // Load all profiles marked as students
-      const { data: profilesData } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .eq('role', 'student')
         .order('created_at', { ascending: false });
 
+      if (profilesError) {
+        console.error('Error loading profiles:', profilesError);
+      }
+      
       setStudents(profilesData || []);
 
       // Load all evaluations
-      const { data: evaluationsData } = await supabase
+      const { data: evaluationsData, error: evalError } = await supabase
         .from('evaluations')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
 
+      if (evalError) {
+        console.error('Error loading evaluations:', evalError);
+      }
+      
       setEvaluations(evaluationsData || []);
 
       // Calculate stats
@@ -95,25 +127,27 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       });
     } catch (error) {
       console.error('Error loading teacher data:', error);
-      toast({
-        title: 'Erro',
-        description: 'Erro ao carregar dados',
-        variant: 'destructive'
+      setStats({
+        totalStudents: 0,
+        totalEvaluations: 0,
+        completedEvaluations: 0,
+        pendingEvaluations: 0
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadStudentData = async () => {
-    setLoading(true);
     try {
       // Load all evaluations
-      const { data: evaluationsData } = await supabase
+      const { data: evaluationsData, error } = await supabase
         .from('evaluations')
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (error) {
+        console.error('Error loading evaluations:', error);
+      }
+      
       setEvaluations(evaluationsData || []);
 
       // Calculate stats
@@ -128,13 +162,11 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       });
     } catch (error) {
       console.error('Error loading student data:', error);
-      toast({
-        title: 'Erro',
-        description: 'Erro ao carregar dados',
-        variant: 'destructive'
+      setStats({
+        totalEvaluations: 0,
+        completedEvaluations: 0,
+        lastEvaluation: null
       });
-    } finally {
-      setLoading(false);
     }
   };
 
