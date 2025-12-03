@@ -34,7 +34,8 @@ export interface ProtocolOutput {
 }
 
 /**
- * FUNÇÃO PRINCIPAL: Analisa flags e retorna diagnósticos
+ * FUNÇÃO PRINCIPAL: Analisa flags e retorna diagnósticos INDIVIDUALIZADOS
+ * Busca TODAS as regras no banco de conhecimento para os flags específicos do aluno
  */
 export function analyzeDiagnosis(input: DiagnosticInput): DiagnosticOutput[] {
   const { flags } = input;
@@ -42,14 +43,23 @@ export function analyzeDiagnosis(input: DiagnosticInput): DiagnosticOutput[] {
 
   // Validar flags
   if (!flags || flags.length === 0) {
+    console.log('Nenhum flag fornecido para análise');
     return [];
   }
 
-  // Processar cada regra de diagnóstico
+  console.log(`🔍 Analisando ${flags.length} flags individuais:`, flags);
+
+  // Processar TODAS as regras de diagnóstico do banco de conhecimento
   for (const rule of diagnosticRules) {
     const match = evaluateRule(rule, flags);
     
     if (match.matched) {
+      console.log(`✅ Regra ${rule.id} correspondeu com ${match.confidence}% de confiança`);
+      
+      // Identificar quais flags específicos ativaram esta regra
+      const activatingFlags = rule.condition.required.filter((f: string) => flags.includes(f));
+      const optionalActivated = rule.condition.optional?.filter((f: string) => flags.includes(f)) || [];
+      
       matchedDiagnoses.push({
         diagnosis: rule.output.diagnosis,
         severity: rule.output.severity,
@@ -58,13 +68,110 @@ export function analyzeDiagnosis(input: DiagnosticInput): DiagnosticOutput[] {
         prognosis: rule.output.prognosis,
         protocolRef: rule.output.protocolRef,
         matchedRule: rule.id,
-        confidence: match.confidence
-      });
+        confidence: match.confidence,
+        // Adicionar informação sobre quais flags específicos ativaram o diagnóstico
+        activatingFlags: [...activatingFlags, ...optionalActivated]
+      } as DiagnosticOutput & { activatingFlags?: string[] });
     }
   }
 
+  // Se nenhuma regra composta corresponder, verificar flags individuais
+  if (matchedDiagnoses.length === 0) {
+    console.log('⚠️ Nenhuma regra composta correspondeu. Analisando flags individuais...');
+    
+    // Buscar diagnósticos baseados em flags individuais
+    for (const flagCode of flags) {
+      const flagInfo = getFlagInfo(flagCode);
+      if (flagInfo) {
+        // Criar diagnóstico individual para cada flag
+        const individualDiag = createIndividualDiagnosis(flagCode, flagInfo);
+        if (individualDiag) {
+          matchedDiagnoses.push(individualDiag);
+        }
+      }
+    }
+  }
+
+  console.log(`📊 Total de ${matchedDiagnoses.length} diagnósticos gerados`);
+
   // Ordenar por confiança (maior primeiro)
   return matchedDiagnoses.sort((a, b) => b.confidence - a.confidence);
+}
+
+/**
+ * Cria diagnóstico individual para um flag específico
+ */
+function createIndividualDiagnosis(flagCode: string, flagInfo: any): DiagnosticOutput | null {
+  // Mapear flags individuais para diagnósticos específicos
+  const individualMappings: Record<string, {
+    diagnosis: string;
+    protocolRef: string;
+    mechanisms: string[];
+    prognosis: string;
+  }> = {
+    'PEP11': {
+      diagnosis: 'Hipercifose Torácica',
+      protocolRef: 'PROTOCOLO_HIPERCIFOSE',
+      mechanisms: ['Encurtamento de peitoral menor/maior', 'Fraqueza de extensores torácicos', 'Bloqueio de mobilidade T4-T8'],
+      prognosis: 'Bom - Responde bem a mobilização e fortalecimento (10-12 semanas)'
+    },
+    'PEP12': {
+      diagnosis: 'Protração de Ombros',
+      protocolRef: 'PROTOCOLO_OMBRO_ANTERIOR',
+      mechanisms: ['Encurtamento de peitoral menor', 'Inibição de serrátil anterior', 'Descentramento glenoumeral'],
+      prognosis: 'Bom - Responde a liberação e ativação (8-10 semanas)'
+    },
+    'PEP14': {
+      diagnosis: 'Anteriorização de Cabeça',
+      protocolRef: 'PROTOCOLO_CABECA_PROTUSA',
+      mechanisms: ['Hiperatividade suboccipital', 'Encurtamento de ECOM', 'Inibição de flexores profundos'],
+      prognosis: 'Bom - Responde a correção postural (8-12 semanas)'
+    },
+    'PEP07': {
+      diagnosis: 'Anteversão Pélvica',
+      protocolRef: 'PROTOCOLO_ANTEVERSAO',
+      mechanisms: ['Encurtamento de psoas', 'Inibição de glúteos', 'Sobrecarga facetária lombar'],
+      prognosis: 'Bom - Responde a liberação + ativação (10-14 semanas)'
+    },
+    'PEP09': {
+      diagnosis: 'Hiperlordose Lombar',
+      protocolRef: 'PROTOCOLO_ANTEVERSAO',
+      mechanisms: ['Psoas encurtado', 'Fraqueza de core', 'Desequilíbrio cadeia anterior/posterior'],
+      prognosis: 'Bom - Responde a estabilização core (10-14 semanas)'
+    },
+    'DYN01': {
+      diagnosis: 'Valgo Dinâmico',
+      protocolRef: 'PROTOCOLO_VALGO_CONDRO',
+      mechanisms: ['Fraqueza de glúteo médio', 'Hiperatividade de TFL', 'Rotação interna femoral'],
+      prognosis: 'Excelente - Alta resposta a fortalecimento (6-10 semanas)'
+    },
+    'PEP04': {
+      diagnosis: 'Joelho Valgo Estático',
+      protocolRef: 'PROTOCOLO_VALGO_CONDRO',
+      mechanisms: ['Fraqueza de glúteo médio', 'Encurtamento de adutores', 'Pronação excessiva'],
+      prognosis: 'Bom - Responde a fortalecimento lateral (8-12 semanas)'
+    },
+    'PEP01': {
+      diagnosis: 'Pé Pronado',
+      protocolRef: 'PROTOCOLO_PE_PRONADO',
+      mechanisms: ['Colapso do arco medial', 'Inibição tibial posterior', 'Rotação interna em cadeia'],
+      prognosis: 'Bom - Responde a fortalecimento intrínseco (8-12 semanas)'
+    }
+  };
+
+  const mapping = individualMappings[flagCode];
+  if (!mapping) return null;
+
+  return {
+    diagnosis: mapping.diagnosis,
+    severity: flagInfo.severity || 2,
+    affectedLines: flagInfo.implies || [],
+    mechanisms: mapping.mechanisms,
+    prognosis: mapping.prognosis,
+    protocolRef: mapping.protocolRef,
+    matchedRule: `INDIVIDUAL_${flagCode}`,
+    confidence: 75 // Confiança base para diagnósticos individuais
+  };
 }
 
 /**
