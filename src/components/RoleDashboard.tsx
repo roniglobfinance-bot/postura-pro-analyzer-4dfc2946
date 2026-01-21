@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Users, 
   FileText, 
@@ -14,8 +15,9 @@ import {
   Eye,
   Edit,
   GraduationCap,
-  ChartBar,
-  UserPlus
+  UserPlus,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -33,16 +35,33 @@ interface RoleDashboardProps {
   userRole: 'teacher' | 'student';
 }
 
+// Demo data for when database is unavailable
+const demoData = {
+  students: [
+    { id: '1', full_name: 'Maria Silva', email: 'maria@exemplo.com', created_at: new Date().toISOString() },
+    { id: '2', full_name: 'João Santos', email: 'joao@exemplo.com', created_at: new Date().toISOString() },
+    { id: '3', full_name: 'Ana Costa', email: 'ana@exemplo.com', created_at: new Date().toISOString() },
+  ],
+  evaluations: [
+    { id: '1', title: 'Avaliação Inicial - Maria Silva', status: 'completed', created_at: new Date().toISOString() },
+    { id: '2', title: 'Avaliação Postural - João Santos', status: 'draft', created_at: new Date().toISOString() },
+    { id: '3', title: 'Reavaliação - Ana Costa', status: 'completed', created_at: new Date().toISOString() },
+  ]
+};
+
 const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
-  const [stats, setStats] = useState<any>({
+  const [stats, setStats] = useState({
     totalStudents: 0,
     totalEvaluations: 0,
     completedEvaluations: 0,
-    pendingEvaluations: 0
+    pendingEvaluations: 0,
+    lastEvaluation: null as string | null
   });
   const [students, setStudents] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [usingDemoData, setUsingDemoData] = useState(false);
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [studentEmail, setStudentEmail] = useState('');
   const [isCreateEvalOpen, setIsCreateEvalOpen] = useState(false);
@@ -50,124 +69,140 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 5000); // Timeout de segurança
-    
-    loadDashboardData().finally(() => {
-      clearTimeout(timer);
-    });
-    
-    return () => clearTimeout(timer);
+    loadDashboardData();
   }, [userRole]);
 
   const loadDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    // Safety timeout - never load forever
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.warn('Dashboard loading timeout - using demo data');
+        useDemoData();
+      }
+    }, 5000);
+
     try {
-      setLoading(true);
       if (userRole === 'teacher') {
         await loadTeacherData();
       } else {
         await loadStudentData();
       }
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-      // Set default empty data on error
-      setStats({
-        totalStudents: 0,
-        totalEvaluations: 0,
-        completedEvaluations: 0,
-        pendingEvaluations: 0
-      });
-      setStudents([]);
-      setEvaluations([]);
+    } catch (err: any) {
+      console.error('Dashboard error:', err);
+      setError(err.message || 'Erro ao carregar dados');
+      useDemoData();
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
 
+  const useDemoData = () => {
+    setUsingDemoData(true);
+    setStudents(demoData.students);
+    setEvaluations(demoData.evaluations);
+    setStats({
+      totalStudents: demoData.students.length,
+      totalEvaluations: demoData.evaluations.length,
+      completedEvaluations: demoData.evaluations.filter(e => e.status === 'completed').length,
+      pendingEvaluations: demoData.evaluations.filter(e => e.status !== 'completed').length,
+      lastEvaluation: demoData.evaluations[0]?.created_at || null
+    });
+    setLoading(false);
+  };
+
   const loadTeacherData = async () => {
+    let profilesData: any[] = [];
+    let evaluationsData: any[] = [];
+
+    // Try to load profiles
     try {
-      // Load all profiles marked as students
-      const { data: profilesData, error: profilesError } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('role', 'student')
         .order('created_at', { ascending: false });
 
-      if (profilesError) {
-        console.error('Error loading profiles:', profilesError);
+      if (error) {
+        console.warn('Could not load profiles:', error.message);
+      } else {
+        profilesData = data || [];
       }
-      
-      setStudents(profilesData || []);
+    } catch (err) {
+      console.warn('Profiles query failed:', err);
+    }
 
-      // Load all evaluations
-      const { data: evaluationsData, error: evalError } = await supabase
+    // Try to load evaluations
+    try {
+      const { data, error } = await supabase
         .from('evaluations')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (evalError) {
-        console.error('Error loading evaluations:', evalError);
+      if (error) {
+        console.warn('Could not load evaluations:', error.message);
+      } else {
+        evaluationsData = data || [];
       }
-      
-      setEvaluations(evaluationsData || []);
-
-      // Calculate stats
-      const totalStudents = profilesData?.length || 0;
-      const totalEvaluations = evaluationsData?.length || 0;
-      const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
-      const pendingEvaluations = totalEvaluations - completedEvaluations;
-
-      setStats({
-        totalStudents,
-        totalEvaluations,
-        completedEvaluations,
-        pendingEvaluations
-      });
-    } catch (error) {
-      console.error('Error loading teacher data:', error);
-      setStats({
-        totalStudents: 0,
-        totalEvaluations: 0,
-        completedEvaluations: 0,
-        pendingEvaluations: 0
-      });
+    } catch (err) {
+      console.warn('Evaluations query failed:', err);
     }
+
+    // If both failed, use demo data
+    if (profilesData.length === 0 && evaluationsData.length === 0) {
+      useDemoData();
+      return;
+    }
+
+    setStudents(profilesData);
+    setEvaluations(evaluationsData);
+    setUsingDemoData(false);
+
+    setStats({
+      totalStudents: profilesData.length,
+      totalEvaluations: evaluationsData.length,
+      completedEvaluations: evaluationsData.filter(e => e.status === 'completed').length,
+      pendingEvaluations: evaluationsData.filter(e => e.status !== 'completed').length,
+      lastEvaluation: evaluationsData[0]?.created_at || null
+    });
   };
 
   const loadStudentData = async () => {
+    let evaluationsData: any[] = [];
+
     try {
-      // Load all evaluations
-      const { data: evaluationsData, error } = await supabase
+      const { data, error } = await supabase
         .from('evaluations')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading evaluations:', error);
+        console.warn('Could not load evaluations:', error.message);
+        useDemoData();
+        return;
       }
-      
-      setEvaluations(evaluationsData || []);
 
-      // Calculate stats
-      const totalEvaluations = evaluationsData?.length || 0;
-      const completedEvaluations = evaluationsData?.filter(e => e.status === 'completed').length || 0;
-      const lastEvaluation = evaluationsData?.[0];
-
-      setStats({
-        totalEvaluations,
-        completedEvaluations,
-        lastEvaluation: lastEvaluation?.created_at || null
-      });
-    } catch (error) {
-      console.error('Error loading student data:', error);
-      setStats({
-        totalEvaluations: 0,
-        completedEvaluations: 0,
-        lastEvaluation: null
-      });
+      evaluationsData = data || [];
+    } catch (err) {
+      console.warn('Evaluations query failed:', err);
+      useDemoData();
+      return;
     }
+
+    setEvaluations(evaluationsData);
+    setUsingDemoData(false);
+
+    setStats({
+      totalStudents: 0,
+      totalEvaluations: evaluationsData.length,
+      completedEvaluations: evaluationsData.filter(e => e.status === 'completed').length,
+      pendingEvaluations: evaluationsData.filter(e => e.status !== 'completed').length,
+      lastEvaluation: evaluationsData[0]?.created_at || null
+    });
   };
 
   const handleAddStudent = async () => {
@@ -183,7 +218,6 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   const handleCreateEvaluation = async () => {
     if (!evalTitle) return;
 
-    setLoading(true);
     try {
       const { error } = await supabase
         .from('evaluations')
@@ -204,15 +238,13 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       setSelectedStudentId('');
       setIsCreateEvalOpen(false);
       loadTeacherData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating evaluation:', error);
       toast({
         title: 'Erro',
-        description: 'Erro ao criar avaliação',
+        description: error.message || 'Erro ao criar avaliação',
         variant: 'destructive'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -229,13 +261,29 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
             </Card>
           ))}
         </div>
+        <p className="text-center text-muted-foreground">Carregando dashboard...</p>
       </div>
     );
   }
 
+  const DemoDataAlert = () => usingDemoData ? (
+    <Alert className="mb-4">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription className="flex items-center justify-between">
+        <span>Exibindo dados de demonstração. Conecte ao banco de dados para ver dados reais.</span>
+        <Button size="sm" variant="outline" onClick={loadDashboardData}>
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Tentar novamente
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
   if (userRole === 'teacher') {
     return (
       <div className="space-y-6">
+        <DemoDataAlert />
+        
         {/* Teacher Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
@@ -327,8 +375,8 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
                     <Button variant="outline" onClick={() => setIsAddStudentOpen(false)}>
                       Cancelar
                     </Button>
-                    <Button onClick={handleAddStudent} disabled={loading || !studentEmail}>
-                      {loading ? 'Adicionando...' : 'Adicionar'}
+                    <Button onClick={handleAddStudent} disabled={!studentEmail}>
+                      Adicionar
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -336,38 +384,51 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {students.map((student) => (
-                <Card key={student.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{student.full_name || 'Sem nome'}</h4>
-                      <Badge variant="outline">
-                        <GraduationCap className="h-3 w-3 mr-1" />
-                        Aluno
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">{student.email}</p>
-                    <div className="flex space-x-2">
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Ver
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedStudentId(student.id);
-                          setEvalTitle(`Avaliação de ${student.full_name || student.email} - ${new Date().toLocaleDateString('pt-BR')}`);
-                          setIsCreateEvalOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Avaliar
-                      </Button>
-                    </div>
+              {students.length === 0 ? (
+                <Card className="col-span-full">
+                  <CardContent className="p-8 text-center">
+                    <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Nenhum aluno cadastrado ainda.</p>
+                    <Button className="mt-4" onClick={() => setIsAddStudentOpen(true)}>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Adicionar primeiro aluno
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                students.map((student) => (
+                  <Card key={student.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">{student.full_name || 'Sem nome'}</h4>
+                        <Badge variant="outline">
+                          <GraduationCap className="h-3 w-3 mr-1" />
+                          Aluno
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">{student.email}</p>
+                      <div className="flex space-x-2">
+                        <Button size="sm" variant="outline">
+                          <Eye className="h-3 w-3 mr-1" />
+                          Ver
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedStudentId(student.id);
+                            setEvalTitle(`Avaliação de ${student.full_name || student.email} - ${new Date().toLocaleDateString('pt-BR')}`);
+                            setIsCreateEvalOpen(true);
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Avaliar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -404,7 +465,7 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
                         id="studentSelect"
                         value={selectedStudentId}
                         onChange={(e) => setSelectedStudentId(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full p-2 border border-input rounded-md bg-background focus:ring-2 focus:ring-ring focus:border-transparent"
                       >
                         <option value="">Selecionar aluno...</option>
                         {students.map((student) => (
@@ -419,8 +480,8 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
                     <Button variant="outline" onClick={() => setIsCreateEvalOpen(false)}>
                       Cancelar
                     </Button>
-                    <Button onClick={handleCreateEvaluation} disabled={loading || !evalTitle}>
-                      {loading ? 'Criando...' : 'Criar Avaliação'}
+                    <Button onClick={handleCreateEvaluation} disabled={!evalTitle}>
+                      Criar Avaliação
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -428,29 +489,42 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
             </div>
 
             <div className="space-y-3">
-              {evaluations.map((evaluation) => (
-                <Card key={evaluation.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">{evaluation.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(evaluation.created_at).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={evaluation.status === 'completed' ? 'default' : 'secondary'}>
-                          {evaluation.status === 'completed' ? 'Concluída' : 'Rascunho'}
-                        </Badge>
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-3 w-3 mr-1" />
-                          Editar
-                        </Button>
-                      </div>
-                    </div>
+              {evaluations.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Nenhuma avaliação criada ainda.</p>
+                    <Button className="mt-4" onClick={() => setIsCreateEvalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Criar primeira avaliação
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                evaluations.map((evaluation) => (
+                  <Card key={evaluation.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium">{evaluation.title}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(evaluation.created_at).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant={evaluation.status === 'completed' ? 'default' : 'secondary'}>
+                            {evaluation.status === 'completed' ? 'Concluída' : 'Rascunho'}
+                          </Badge>
+                          <Button size="sm" variant="outline">
+                            <Edit className="h-3 w-3 mr-1" />
+                            Editar
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -461,6 +535,8 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
   // Student Dashboard
   return (
     <div className="space-y-6">
+      <DemoDataAlert />
+      
       {/* Student Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -492,14 +568,13 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Última Avaliação</p>
-                <p className="text-sm font-medium">
+                <p className="text-lg font-medium">
                   {stats.lastEvaluation 
                     ? new Date(stats.lastEvaluation).toLocaleDateString('pt-BR')
-                    : 'Nenhuma'
-                  }
+                    : 'Nenhuma'}
                 </p>
               </div>
-              <Clock className="h-8 w-8 text-blue-600" />
+              <Clock className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -508,44 +583,34 @@ const RoleDashboard = ({ userRole }: RoleDashboardProps) => {
       {/* Student Evaluations */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <ChartBar className="h-5 w-5 mr-2" />
-            Minhas Avaliações
-          </CardTitle>
+          <CardTitle>Minhas Avaliações</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             {evaluations.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhuma avaliação encontrada</p>
-                <p className="text-sm text-muted-foreground">
-                  Aguarde seu professor criar uma avaliação para você
-                </p>
+                <p className="text-muted-foreground">Você ainda não possui avaliações.</p>
               </div>
             ) : (
               evaluations.map((evaluation) => (
-                <Card key={evaluation.id} className="border-l-4 border-l-blue-500">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">{evaluation.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(evaluation.created_at).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={evaluation.status === 'completed' ? 'default' : 'secondary'}>
-                          {evaluation.status === 'completed' ? 'Concluída' : 'Em andamento'}
-                        </Badge>
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-3 w-3 mr-1" />
-                          Visualizar
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div key={evaluation.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                  <div>
+                    <h4 className="font-medium">{evaluation.title}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(evaluation.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={evaluation.status === 'completed' ? 'default' : 'secondary'}>
+                      {evaluation.status === 'completed' ? 'Concluída' : 'Em andamento'}
+                    </Badge>
+                    <Button size="sm" variant="outline">
+                      <Eye className="h-3 w-3 mr-1" />
+                      Ver
+                    </Button>
+                  </div>
+                </div>
               ))
             )}
           </div>
