@@ -19,13 +19,12 @@ interface NavigationProps {
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'assessment', label: 'Avaliação Integrada', icon: Scan },
-    { id: 'progress', label: 'Relatórios', icon: BarChart3 },
-    { id: 'workouts', label: 'Exercícios', icon: BookOpen },
-    { id: 'clients', label: 'Gerenciar Alunos', icon: Users },
-    { id: 'system-summary', label: 'Status do Sistema', icon: Settings },
-    { id: 'profile', label: 'Perfil', icon: User }
+    { id: 'clients', label: 'Alunos', icon: Users },
+    { id: 'assessment-wizard', label: 'Avaliações', icon: Scan },
+    { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
+    { id: 'plan-builder', label: 'Plano', icon: Brain },
+    { id: 'session-tracker', label: 'Sessões', icon: Camera },
+    { id: 'protocol-library', label: 'Biblioteca', icon: BookOpen },
   ];
 
   return (
