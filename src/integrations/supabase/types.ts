@@ -260,6 +260,407 @@ export type Database = {
           },
         ]
       }
+      ppa_analysis_runs: {
+        Row: {
+          assessment_id: string
+          confidence_final: number | null
+          created_at: string
+          dominant_vector: Json | null
+          id: string
+          model_version: string | null
+          status: string
+        }
+        Insert: {
+          assessment_id: string
+          confidence_final?: number | null
+          created_at?: string
+          dominant_vector?: Json | null
+          id?: string
+          model_version?: string | null
+          status?: string
+        }
+        Update: {
+          assessment_id?: string
+          confidence_final?: number | null
+          created_at?: string
+          dominant_vector?: Json | null
+          id?: string
+          model_version?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_analysis_runs_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_assessments: {
+        Row: {
+          context: Json
+          created_at: string
+          id: string
+          pain: Json
+          status: string
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          id?: string
+          pain?: Json
+          status?: string
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          id?: string
+          pain?: Json
+          status?: string
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_assessments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_assessments_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_clusters: {
+        Row: {
+          analysis_run_id: string
+          cluster_types: Json | null
+          id: string
+          rationale: Json | null
+          score: number
+        }
+        Insert: {
+          analysis_run_id: string
+          cluster_types?: Json | null
+          id?: string
+          rationale?: Json | null
+          score?: number
+        }
+        Update: {
+          analysis_run_id?: string
+          cluster_types?: Json | null
+          id?: string
+          rationale?: Json | null
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_clusters_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_engine_decisions: {
+        Row: {
+          analysis_run_id: string
+          created_at: string
+          decided_by: string
+          final_decision: Json | null
+          id: string
+          macro_state: string
+          micro_states: Json | null
+          risk_level: string
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string
+          decided_by?: string
+          final_decision?: Json | null
+          id?: string
+          macro_state: string
+          micro_states?: Json | null
+          risk_level?: string
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string
+          decided_by?: string
+          final_decision?: Json | null
+          id?: string
+          macro_state?: string
+          micro_states?: Json | null
+          risk_level?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_engine_decisions_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_findings: {
+        Row: {
+          analysis_run_id: string
+          chain: Json | null
+          confidence: number | null
+          direction: string | null
+          finding_key: string
+          id: string
+          severity: number
+        }
+        Insert: {
+          analysis_run_id: string
+          chain?: Json | null
+          confidence?: number | null
+          direction?: string | null
+          finding_key: string
+          id?: string
+          severity?: number
+        }
+        Update: {
+          analysis_run_id?: string
+          chain?: Json | null
+          confidence?: number | null
+          direction?: string | null
+          finding_key?: string
+          id?: string
+          severity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_findings_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_media_assets: {
+        Row: {
+          assessment_id: string
+          capture_confidence: number | null
+          created_at: string
+          id: string
+          image_url: string
+          qa_reasons: Json | null
+          qa_status: string
+          side: string
+          type: string
+          view: string
+        }
+        Insert: {
+          assessment_id: string
+          capture_confidence?: number | null
+          created_at?: string
+          id?: string
+          image_url: string
+          qa_reasons?: Json | null
+          qa_status?: string
+          side?: string
+          type?: string
+          view: string
+        }
+        Update: {
+          assessment_id?: string
+          capture_confidence?: number | null
+          created_at?: string
+          id?: string
+          image_url?: string
+          qa_reasons?: Json | null
+          qa_status?: string
+          side?: string
+          type?: string
+          view?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_media_assets_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_metrics: {
+        Row: {
+          analysis_run_id: string
+          confidence: number | null
+          id: string
+          key: string
+          severity: number
+          threshold_ref: number | null
+          unit: string | null
+          value: number
+        }
+        Insert: {
+          analysis_run_id: string
+          confidence?: number | null
+          id?: string
+          key: string
+          severity?: number
+          threshold_ref?: number | null
+          unit?: string | null
+          value?: number
+        }
+        Update: {
+          analysis_run_id?: string
+          confidence?: number | null
+          id?: string
+          key?: string
+          severity?: number
+          threshold_ref?: number | null
+          unit?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_metrics_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_monitoring_logs: {
+        Row: {
+          created_at: string
+          id: string
+          integrity_result: string
+          notes: string | null
+          pain_delta: Json | null
+          session_id: string | null
+          student_id: string
+          tns: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integrity_result?: string
+          notes?: string | null
+          pain_delta?: Json | null
+          session_id?: string | null
+          student_id: string
+          tns?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integrity_result?: string
+          notes?: string | null
+          pain_delta?: Json | null
+          session_id?: string | null
+          student_id?: string
+          tns?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_monitoring_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_plan_links: {
+        Row: {
+          active: boolean
+          analysis_run_id: string
+          created_at: string
+          id: string
+          periodizer_plan_id: string | null
+          smart_treino_plan_id: string | null
+          student_id: string
+        }
+        Insert: {
+          active?: boolean
+          analysis_run_id: string
+          created_at?: string
+          id?: string
+          periodizer_plan_id?: string | null
+          smart_treino_plan_id?: string | null
+          student_id: string
+        }
+        Update: {
+          active?: boolean
+          analysis_run_id?: string
+          created_at?: string
+          id?: string
+          periodizer_plan_id?: string | null
+          smart_treino_plan_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_plan_links_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_plan_links_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_protocols_library: {
+        Row: {
+          category: string
+          contraindications: Json | null
+          created_at: string
+          id: string
+          protocol_key: string
+          steps: Json
+          version: number
+        }
+        Insert: {
+          category: string
+          contraindications?: Json | null
+          created_at?: string
+          id?: string
+          protocol_key: string
+          steps?: Json
+          version?: number
+        }
+        Update: {
+          category?: string
+          contraindications?: Json | null
+          created_at?: string
+          id?: string
+          protocol_key?: string
+          steps?: Json
+          version?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
