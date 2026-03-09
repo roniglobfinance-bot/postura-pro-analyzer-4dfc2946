@@ -1,15 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { 
-  Camera, 
-  FileText, 
   Users, 
-  Settings,
-  User,
   BarChart3,
   BookOpen,
-  Home,
   Scan,
-  Brain
+  Brain,
+  Camera,
+  TrendingUp
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -25,6 +22,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'plan-builder', label: 'Plano', icon: Brain },
     { id: 'session-tracker', label: 'Sessões', icon: Camera },
     { id: 'protocol-library', label: 'Biblioteca', icon: BookOpen },
+    { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 
   return (

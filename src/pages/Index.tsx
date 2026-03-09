@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
@@ -10,6 +9,7 @@ import ResultsHUD from '@/components/pages/ResultsHUD';
 import PlanBuilder from '@/components/pages/PlanBuilder';
 import SessionTracker from '@/components/pages/SessionTracker';
 import ProtocolLibrary from '@/components/pages/ProtocolLibrary';
+import ProgressDashboard from '@/components/pages/ProgressDashboard';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('clients');
@@ -17,21 +17,23 @@ const Index = () => {
   const renderCurrentView = () => {
     switch (currentView) {
       case 'clients':
-        return <ClientManagement />;
+        return <ClientManagement onNavigate={setCurrentView} />;
       case 'assessment-wizard':
         return <AssessmentWizard onNavigate={setCurrentView} />;
       case 'media-collector':
         return <MediaCollector onNavigate={setCurrentView} />;
       case 'results-hud':
-        return <ResultsHUD />;
+        return <ResultsHUD onNavigate={setCurrentView} />;
       case 'plan-builder':
-        return <PlanBuilder />;
+        return <PlanBuilder onNavigate={setCurrentView} />;
       case 'session-tracker':
-        return <SessionTracker />;
+        return <SessionTracker onNavigate={setCurrentView} />;
       case 'protocol-library':
         return <ProtocolLibrary />;
+      case 'progress-dashboard':
+        return <ProgressDashboard />;
       default:
-        return <ClientManagement />;
+        return <ClientManagement onNavigate={setCurrentView} />;
     }
   };
 
