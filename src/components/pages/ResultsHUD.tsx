@@ -16,16 +16,68 @@ import {
   Flame,
   Ruler,
   BarChart3,
+  Loader2,
+  Shield,
+  FileText,
 } from 'lucide-react';
 import RiskGauges from '@/components/dashboard/RiskGauges';
 import HeatmapOverlay from '@/components/dashboard/HeatmapOverlay';
 import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-type ResultStatus = 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
+type ResultStatus = 'idle' | 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
+
+interface AIReport {
+  macro_diagnosis: string;
+  postural_archetype: string;
+  confidence_score: number;
+  risk_assessment: {
+    lumbar_risk: number;
+    cervical_risk: number;
+    base_risk: number;
+    overall_score: number;
+  };
+  hud_metrics: {
+    iep: number;
+    ea: number;
+    pts: number;
+    tns: number;
+  };
+  operational_mode: 'LOAD' | 'SHIELD' | 'MIXED';
+  operational_justification: string;
+  tension_zones: Array<{
+    name: string;
+    x: number;
+    y: number;
+    intensity: number;
+    myofascial_line: string;
+  }>;
+  findings_analysis: Array<{
+    key: string;
+    direction: string;
+    severity: number;
+    confidence: number;
+    clinical_note: string;
+  }>;
+  guardrails: Array<{
+    code: string;
+    triggered: boolean;
+    message: string;
+  }>;
+  recovery_protocol: {
+    phase_1_release: string[];
+    phase_2_activation: string[];
+    phase_3_integration: string[];
+  };
+  clinical_summary: string;
+}
 
 const ResultsHUD = () => {
-  const [status] = useState<ResultStatus>('pronto');
+  const [status, setStatus] = useState<ResultStatus>('idle');
   const [activeTab, setActiveTab] = useState('overview');
+  const [aiReport, setAiReport] = useState<AIReport | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Demo image (placeholder)
   const demoImageUrl = '/placeholder.svg';
@@ -49,8 +101,15 @@ const ResultsHUD = () => {
     { name: 'right_ankle', x: 290, y: 525, confidence: 0.86 },
   ];
 
-  // Demo tension zones for heatmap
-  const demoTensionZones = [
+  // Default demo data when no AI report
+  const defaultFindings = [
+    { key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
+    { key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
+    { key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
+    { key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
+  ];
+
+  const defaultTensionZones = [
     { id: 'z1', name: 'Cervical Posterior', x: 50, y: 15, intensity: 78, myofascialLine: 'SBL' },
     { id: 'z2', name: 'Trapézio Superior', x: 35, y: 22, intensity: 65, myofascialLine: 'LL' },
     { id: 'z3', name: 'Lombar', x: 50, y: 55, intensity: 85, myofascialLine: 'SBL' },
@@ -58,39 +117,119 @@ const ResultsHUD = () => {
     { id: 'z5', name: 'Joelho Medial E', x: 40, y: 78, intensity: 70, myofascialLine: 'DFL' },
   ];
 
-  // Demo risk values
-  const risks = {
-    lumbar: 72,
-    cervical: 58,
-    base: 45,
-    overall: 62,
-  };
+  // Use AI data when available, fallback to demo
+  const risks = aiReport
+    ? aiReport.risk_assessment
+    : { lumbar_risk: 72, cervical_risk: 58, base_risk: 45, overall_score: 62 };
 
-  // HUD metric cards
   const hudCards = [
-    { key: 'IEP', label: 'Estabilidade Podal', value: 72, icon: Activity, color: 'text-blue-600' },
-    { key: 'EA', label: 'Espaço Articular', value: 58, icon: Zap, color: 'text-purple-600' },
-    { key: 'PTS', label: 'Transferência Potência', value: 65, icon: Brain, color: 'text-green-600' },
-    { key: 'TNS', label: 'Tremor Neuromuscular', value: 30, icon: Activity, color: 'text-orange-600' },
+    { key: 'IEP', label: 'Estabilidade Podal', value: aiReport?.hud_metrics.iep ?? 72, icon: Activity, color: 'text-blue-600' },
+    { key: 'EA', label: 'Espaço Articular', value: aiReport?.hud_metrics.ea ?? 58, icon: Zap, color: 'text-purple-600' },
+    { key: 'PTS', label: 'Transferência Potência', value: aiReport?.hud_metrics.pts ?? 65, icon: Brain, color: 'text-green-600' },
+    { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 30, icon: Activity, color: 'text-orange-600' },
   ];
 
-  const findings = [
-    { key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
-    { key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
-    { key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
-    { key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
-  ];
+  const findings = aiReport
+    ? aiReport.findings_analysis.map(f => ({
+        key: f.key,
+        direction: f.direction,
+        severity: f.severity,
+        confidence: f.confidence,
+        clinical_note: f.clinical_note,
+      }))
+    : defaultFindings.map(f => ({ ...f, clinical_note: '' }));
+
+  const tensionZones = aiReport
+    ? aiReport.tension_zones.map((z, i) => ({
+        id: `z${i}`,
+        name: z.name,
+        x: z.x,
+        y: z.y,
+        intensity: z.intensity,
+        myofascialLine: z.myofascial_line,
+      }))
+    : defaultTensionZones;
 
   const motorStages = [
-    { key: 'MAPPING_GPS', label: 'Mapeamento GPS', done: true },
-    { key: 'LOAD_OR_SHIELD', label: 'Load / Shield', done: status === 'pronto' },
+    { key: 'MAPPING_GPS', label: 'Mapeamento GPS', done: status === 'pronto' || aiReport !== null },
+    { key: 'LOAD_OR_SHIELD', label: 'Load / Shield', done: aiReport !== null },
     { key: 'EXECUTION_INTEGRITY', label: 'Integridade Execução', done: false },
   ];
+
+  const triggeredGuardrails = aiReport?.guardrails.filter(g => g.triggered) || [];
 
   const getSeverityColor = (s: number) => {
     if (s >= 3) return 'bg-red-100 text-red-800 border-red-300';
     if (s === 2) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
     return 'bg-green-100 text-green-800 border-green-300';
+  };
+
+  const getModeColor = (mode: string) => {
+    if (mode === 'LOAD') return 'bg-green-100 text-green-800';
+    if (mode === 'SHIELD') return 'bg-red-100 text-red-800';
+    return 'bg-yellow-100 text-yellow-800';
+  };
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setStatus('processando');
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-report', {
+        body: {
+          findings: defaultFindings,
+          metrics: [
+            { key: 'cranio_cervical_angle', value: 48, unit: 'degrees', severity: 2 },
+            { key: 'pelvic_tilt', value: 18, unit: 'degrees', severity: 1 },
+            { key: 'shoulder_imbalance', value: 3.5, unit: 'cm', severity: 1 },
+            { key: 'thoracic_kyphosis', value: 42, unit: 'degrees', severity: 2 },
+          ],
+          clusters: [
+            { cluster_types: ['compressive_upper', 'instability_lower'], score: 68 },
+          ],
+          clientData: { name: 'Cliente', age: 35, height: 175, weight: 72 },
+          context: { footwear: 'tênis_corrida', surface: 'plano', objective: 'correção_postural', environment: 'indoor_iluminado' },
+          pain: { region: 'lombar', intensity: 5, triggers: 'sentado_prolongado' },
+        },
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        toast.error('Erro ao analisar relatório. Tente novamente.');
+        setStatus('idle');
+        return;
+      }
+
+      if (data?.status === 'error') {
+        toast.error(data.error || 'Erro na análise');
+        setStatus('idle');
+        return;
+      }
+
+      if (data?.report) {
+        setAiReport(data.report);
+        setStatus('pronto');
+        
+        if (data.report.confidence_score < 0.6) {
+          setStatus('baixa_confianca');
+          toast.warning('Confiança baixa. Revise os dados manualmente.');
+        } else {
+          toast.success('Análise concluída com sucesso!');
+        }
+      }
+    } catch (err: any) {
+      console.error('Analysis error:', err);
+      if (err?.message?.includes('429')) {
+        toast.error('Rate limit excedido. Aguarde alguns segundos.');
+      } else if (err?.message?.includes('402')) {
+        toast.error('Créditos insuficientes. Adicione créditos no workspace.');
+      } else {
+        toast.error('Erro inesperado na análise.');
+      }
+      setStatus('idle');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -101,11 +240,46 @@ const ResultsHUD = () => {
           <h1 className="text-2xl font-bold text-foreground">Resultados</h1>
           <p className="text-muted-foreground text-sm">Scanner Matricial + HUD de Análise</p>
         </div>
-        <Badge variant={status === 'pronto' ? 'default' : 'outline'}>
-          {status === 'pronto' && <CheckCircle className="h-3 w-3 mr-1" />}
-          {status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {aiReport && (
+            <Badge className={getModeColor(aiReport.operational_mode)}>
+              <Shield className="h-3 w-3 mr-1" />
+              {aiReport.operational_mode}
+            </Badge>
+          )}
+          <Badge variant={status === 'pronto' ? 'default' : 'outline'}>
+            {status === 'pronto' && <CheckCircle className="h-3 w-3 mr-1" />}
+            {status === 'processando' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+            {status === 'idle' ? 'aguardando' : status}
+          </Badge>
+        </div>
       </div>
+
+      {/* AI Report Banner */}
+      {aiReport && (
+        <Alert>
+          <Brain className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Diagnóstico Gemini:</strong> {aiReport.macro_diagnosis}
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline">{aiReport.postural_archetype}</Badge>
+              <span className="text-xs text-muted-foreground">
+                Confiança: {Math.round(aiReport.confidence_score * 100)}%
+              </span>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Guardrail Alerts */}
+      {triggeredGuardrails.map((g, i) => (
+        <Alert key={i} variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{g.code}:</strong> {g.message}
+          </AlertDescription>
+        </Alert>
+      ))}
 
       {/* HUD Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -146,9 +320,9 @@ const ResultsHUD = () => {
         </CardContent>
       </Card>
 
-      {/* Main Tabs: Overview / Análise Visual / Mapa de Calor / Achados */}
+      {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="overview" className="text-xs sm:text-sm">
             <BarChart3 className="h-3 w-3 mr-1 hidden sm:inline" />
             Riscos
@@ -165,32 +339,30 @@ const ResultsHUD = () => {
             <AlertTriangle className="h-3 w-3 mr-1 hidden sm:inline" />
             Achados
           </TabsTrigger>
+          <TabsTrigger value="protocol" className="text-xs sm:text-sm" disabled={!aiReport}>
+            <FileText className="h-3 w-3 mr-1 hidden sm:inline" />
+            Protocolo
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab: Risk Gauges */}
         <TabsContent value="overview" className="space-y-4">
           <RiskGauges
-            lumbarRisk={risks.lumbar}
-            cervicalRisk={risks.cervical}
-            baseRisk={risks.base}
-            overallScore={risks.overall}
+            lumbarRisk={risks.lumbar_risk}
+            cervicalRisk={risks.cervical_risk}
+            baseRisk={risks.base_risk}
+            overallScore={risks.overall_score}
           />
         </TabsContent>
 
         {/* Tab: Analytic Canvas */}
         <TabsContent value="analysis">
-          <AnalyticCanvas
-            imageUrl={demoImageUrl}
-            keypoints={demoKeypoints}
-          />
+          <AnalyticCanvas imageUrl={demoImageUrl} keypoints={demoKeypoints} />
         </TabsContent>
 
         {/* Tab: Heatmap */}
         <TabsContent value="heatmap">
-          <HeatmapOverlay
-            imageUrl={demoImageUrl}
-            tensionZones={demoTensionZones}
-          />
+          <HeatmapOverlay imageUrl={demoImageUrl} tensionZones={tensionZones} />
         </TabsContent>
 
         {/* Tab: Findings */}
@@ -202,26 +374,116 @@ const ResultsHUD = () => {
             <CardContent>
               <div className="space-y-2">
                 {findings.map(f => (
-                  <div key={f.key} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <Badge className={getSeverityColor(f.severity)}>S{f.severity}</Badge>
-                      <span className="text-sm font-medium">{f.key.replace(/_/g, ' ')}</span>
-                      <Badge variant="outline" className="text-xs">{f.direction}</Badge>
+                  <div key={f.key} className="p-3 rounded-lg border space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Badge className={getSeverityColor(f.severity)}>S{f.severity}</Badge>
+                        <span className="text-sm font-medium">{f.key.replace(/_/g, ' ')}</span>
+                        <Badge variant="outline" className="text-xs">{f.direction}</Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{Math.round(f.confidence * 100)}% conf.</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{Math.round(f.confidence * 100)}% conf.</span>
+                    {f.clinical_note && (
+                      <p className="text-xs text-muted-foreground pl-12">{f.clinical_note}</p>
+                    )}
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab: Protocol (AI only) */}
+        <TabsContent value="protocol" className="space-y-4">
+          {aiReport && (
+            <>
+              {/* Operational Mode */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium">Modo Operacional Recomendado</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{aiReport.operational_justification}</p>
+                    </div>
+                    <Badge className={`text-lg px-4 py-2 ${getModeColor(aiReport.operational_mode)}`}>
+                      {aiReport.operational_mode}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Recovery Protocol */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Protocolo de Recuperação - 3 Fases</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                    <h4 className="font-medium text-red-800 mb-2">Fase 1: Liberação Miofascial</h4>
+                    <ul className="space-y-1">
+                      {aiReport.recovery_protocol.phase_1_release.map((item, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-red-600 shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <h4 className="font-medium text-yellow-800 mb-2">Fase 2: Ativação Muscular</h4>
+                    <ul className="space-y-1">
+                      {aiReport.recovery_protocol.phase_2_activation.map((item, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-yellow-600 shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="p-4 rounded-lg bg-green-50 border border-green-200">
+                    <h4 className="font-medium text-green-800 mb-2">Fase 3: Integração Funcional</h4>
+                    <ul className="space-y-1">
+                      {aiReport.recovery_protocol.phase_3_integration.map((item, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Clinical Summary */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Resumo Clínico</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">{aiReport.clinical_summary}</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
-        <Button><Brain className="h-4 w-4 mr-2" /> Gerar Plano Automático</Button>
-        <Button variant="outline"><Eye className="h-4 w-4 mr-2" /> Revisar Manualmente</Button>
-        <Button variant="outline"><RefreshCw className="h-4 w-4 mr-2" /> Solicitar Nova Mídia</Button>
+        <Button onClick={handleAnalyze} disabled={isAnalyzing}>
+          {isAnalyzing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Brain className="h-4 w-4 mr-2" />
+          )}
+          {isAnalyzing ? 'Analisando com Gemini...' : aiReport ? 'Reanalisar com IA' : 'Analisar com Gemini'}
+        </Button>
+        <Button variant="outline" disabled={!aiReport}>
+          <Eye className="h-4 w-4 mr-2" /> Revisar Manualmente
+        </Button>
+        <Button variant="outline">
+          <RefreshCw className="h-4 w-4 mr-2" /> Solicitar Nova Mídia
+        </Button>
       </div>
 
       {/* Micro-state alerts */}
