@@ -112,7 +112,7 @@ const ProgressDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(20);
 
-      setMonitoringLogs((logs as MonitoringLog[]) || []);
+      setMonitoringLogs((logs as unknown as MonitoringLog[]) || []);
     } catch (err) {
       console.error('Error loading evolution data:', err);
     } finally {

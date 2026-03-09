@@ -144,7 +144,7 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
 
   const realKeypoints = realMetrics
     .filter(m => m.key.startsWith('keypoint_'))
-    .map(m => ({ name: m.key.replace('keypoint_', ''), x: m.value, y: Number(m.unit) || 0, confidence: m.confidence || 0 }));
+    .map(m => ({ name: m.key.replace('keypoint_', ''), x: m.value, y: Number(m.unit) || 0, confidence: 0.9 }));
 
   const demoKeypoints = [
     { name: 'nose', x: 250, y: 60, confidence: 0.95 },
