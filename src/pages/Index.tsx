@@ -21,7 +21,7 @@ const Index = () => {
       case 'assessment-wizard':
         return <AssessmentWizard onNavigate={setCurrentView} />;
       case 'media-collector':
-        return <MediaCollector />;
+        return <MediaCollector onNavigate={setCurrentView} />;
       case 'results-hud':
         return <ResultsHUD />;
       case 'plan-builder':

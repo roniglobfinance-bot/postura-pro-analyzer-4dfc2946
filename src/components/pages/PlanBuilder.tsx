@@ -1,28 +1,63 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, CheckCircle, Lock, Shield, Zap, Brain } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Lock, Shield, Zap, Brain, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
 
 type PlanMode = 'LOAD' | 'SHIELD' | 'MIXED';
 type PlanStatus = 'sugestao' | 'override' | 'publicado' | 'travado';
 
 const PlanBuilder = () => {
+  const { active } = useActiveAssessment();
   const [mode, setMode] = useState<PlanMode>('MIXED');
   const [status, setStatus] = useState<PlanStatus>('sugestao');
   const [overrideJustification, setOverrideJustification] = useState('');
   const [showOverride, setShowOverride] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Demo guardrails
-  const guardrails = [
-    { key: 'SHOE_INSTABILITY_CHECK', active: false, message: 'Calçado amortecido detectado com carga axial' },
-    { key: 'DECOMPRESSION_LOGIC', active: true, message: 'Cluster compressivo alto → descompressão obrigatória' },
-    { key: 'STABILITY_SHIELD', active: false, message: 'Instabilidade alta detectada' },
-    { key: 'NEUROMUSCULAR_WAKEUP', active: true, message: 'Déficit motor alto → wakeup obrigatório' },
-  ];
+  // Load recommended mode from engine decision
+  const [engineDecision, setEngineDecision] = useState<any>(null);
+
+  useEffect(() => {
+    if (!active.analysisRunId) return;
+    const loadDecision = async () => {
+      const { data } = await supabase
+        .from('ppa_engine_decisions' as any)
+        .select('*')
+        .eq('analysis_run_id', active.analysisRunId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        const d = data as any;
+        setEngineDecision(d);
+        if (d.macro_state === 'LOAD' || d.macro_state === 'SHIELD' || d.macro_state === 'MIXED') {
+          setMode(d.macro_state as PlanMode);
+        }
+      }
+    };
+    loadDecision();
+  }, [active.analysisRunId]);
+
+  // Build guardrails from engine decision
+  const guardrails = engineDecision?.micro_states
+    ? [
+        { key: 'SHOE_INSTABILITY_CHECK', active: (engineDecision.micro_states as string[]).includes('SHOE_INSTABILITY_CHECK'), message: 'Calçado amortecido detectado com carga axial' },
+        { key: 'DECOMPRESSION_LOGIC', active: (engineDecision.micro_states as string[]).includes('DECOMPRESSION_LOGIC'), message: 'Cluster compressivo alto → descompressão obrigatória' },
+        { key: 'STABILITY_SHIELD', active: (engineDecision.micro_states as string[]).includes('STABILITY_SHIELD'), message: 'Instabilidade alta detectada' },
+        { key: 'NEUROMUSCULAR_WAKEUP', active: (engineDecision.micro_states as string[]).includes('NEUROMUSCULAR_WAKEUP'), message: 'Déficit motor alto → wakeup obrigatório' },
+        { key: 'PAIN_SPIKE_RISK', active: (engineDecision.micro_states as string[]).includes('PAIN_SPIKE_RISK'), message: 'Risco de pico de dor detectado' },
+      ]
+    : [
+        { key: 'DECOMPRESSION_LOGIC', active: true, message: 'Cluster compressivo alto → descompressão obrigatória' },
+        { key: 'NEUROMUSCULAR_WAKEUP', active: true, message: 'Déficit motor alto → wakeup obrigatório' },
+      ];
 
   const mandatoryBlocks = [
     { name: 'Wakeup Neural', icon: Brain, protocols: ['Mobilização Neural MMII', 'Cat-Camel Segmentar', 'Diafragma 360'] },
@@ -33,13 +68,34 @@ const PlanBuilder = () => {
   const activeGuardrails = guardrails.filter(g => g.active);
   const isLocked = activeGuardrails.length > 0 && mode === 'LOAD';
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (isLocked) {
       toast({ title: 'Bloqueado', description: 'Mude para SHIELD ou resolva guardrails.', variant: 'destructive' });
       return;
     }
-    setStatus('publicado');
-    toast({ title: 'Plano publicado', description: 'Plano vinculado ao aluno com sucesso.' });
+
+    if (!active.analysisRunId || !active.studentId) {
+      setStatus('publicado');
+      toast({ title: 'Plano publicado', description: 'Plano vinculado (modo demo).' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('ppa_plan_links' as any).insert({
+        analysis_run_id: active.analysisRunId,
+        student_id: active.studentId,
+        active: true,
+      });
+      if (error) throw error;
+
+      setStatus('publicado');
+      toast({ title: 'Plano publicado', description: 'Plano vinculado ao aluno com sucesso.' });
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleOverride = () => {
@@ -56,8 +112,20 @@ const PlanBuilder = () => {
     <div className="space-y-6 pb-20 md:pb-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Plano Load / Shield</h1>
-        <p className="text-muted-foreground text-sm">Configure o modo de treino com guardrails de segurança.</p>
+        <p className="text-muted-foreground text-sm">
+          Configure o modo de treino com guardrails de segurança.
+          {active.studentName && <> — <strong>{active.studentName}</strong></>}
+        </p>
       </div>
+
+      {engineDecision && (
+        <div className="p-3 rounded-lg border bg-primary/5">
+          <p className="text-sm"><strong>Recomendação IA:</strong> Modo {engineDecision.macro_state} — Risco {engineDecision.risk_level}</p>
+          {engineDecision.final_decision?.justification && (
+            <p className="text-xs text-muted-foreground mt-1">{engineDecision.final_decision.justification}</p>
+          )}
+        </div>
+      )}
 
       {/* Mode selector */}
       <div className="flex gap-2">
@@ -141,12 +209,16 @@ const PlanBuilder = () => {
 
       {/* Publish */}
       <div className="flex gap-3">
-        <Button onClick={handlePublish} disabled={isLocked}>
-          {isLocked ? <Lock className="h-4 w-4 mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-          {isLocked ? 'Travado por Guardrail' : 'Publicar Plano'}
+        <Button onClick={handlePublish} disabled={isLocked || saving}>
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
+           isLocked ? <Lock className="h-4 w-4 mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+          {isLocked ? 'Travado por Guardrail' : saving ? 'Publicando...' : 'Publicar Plano'}
         </Button>
         {status === 'publicado' && (
           <Badge className="bg-green-100 text-green-800 self-center">✅ Publicado</Badge>
+        )}
+        {status === 'override' && (
+          <Badge className="bg-yellow-100 text-yellow-800 self-center">⚠️ Override Ativo</Badge>
         )}
       </div>
     </div>

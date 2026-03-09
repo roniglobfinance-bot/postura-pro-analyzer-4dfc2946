@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,15 +7,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
-import { Camera, CheckCircle, AlertTriangle, XCircle, ArrowRight, User } from 'lucide-react';
+import { Camera, CheckCircle, AlertTriangle, ArrowRight, User, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
 
 interface AssessmentWizardProps {
   onNavigate?: (view: string) => void;
 }
 
 type WizardStep = 'student' | 'context' | 'pain' | 'checklist';
+
+interface StudentOption {
+  student_id: string;
+  full_name: string;
+  email: string;
+}
 
 const REQUIRED_VIEWS = [
   { key: 'frente', label: 'Frente', icon: '🧍' },
@@ -25,8 +32,11 @@ const REQUIRED_VIEWS = [
 ];
 
 const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
+  const { setAssessment, setStatus: setFlowStatus, setContext: setFlowContext, setPain: setFlowPain } = useActiveAssessment();
   const [step, setStep] = useState<WizardStep>('student');
-  const [studentId, setStudentId] = useState('');
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [context, setContext] = useState({
     calcado: '',
     superficie: '',
@@ -38,8 +48,28 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
     intensidade: [0],
     gatilhos: '',
   });
-  const [status, setStatus] = useState<string>('novo');
   const [saving, setSaving] = useState(false);
+
+  // Load real students from Supabase
+  useEffect(() => {
+    const loadStudents = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase.rpc('get_teacher_students', { teacher_id: user.id });
+        if (error) throw error;
+        setStudents((data as StudentOption[]) || []);
+      } catch (err) {
+        console.error('Failed to load students:', err);
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
+    loadStudents();
+  }, []);
+
+  const selectedStudent = students.find(s => s.student_id === selectedStudentId);
 
   const handleCreateAssessment = async () => {
     setSaving(true);
@@ -50,17 +80,29 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
         return;
       }
 
-      const { error } = await supabase.from('ppa_assessments' as any).insert({
-        student_id: studentId || user.id,
+      const studentId = selectedStudentId || user.id;
+      const painData = { ...pain, intensidade: pain.intensidade[0] };
+
+      const { data, error } = await supabase.from('ppa_assessments' as any).insert({
+        student_id: studentId,
         teacher_id: user.id,
         context,
-        pain: { ...pain, intensidade: pain.intensidade[0] },
+        pain: painData,
         status: 'em_coleta',
-      });
+      }).select('id').single();
 
       if (error) throw error;
-      toast({ title: 'Avaliação criada', description: 'Inicie a coleta de mídia.' });
-      setStatus('em_coleta');
+
+      const assessmentId = (data as any).id;
+      const studentName = selectedStudent?.full_name || user.email || 'Próprio';
+
+      // Update shared flow state
+      setAssessment(assessmentId, studentId, studentName);
+      setFlowStatus('em_coleta');
+      setFlowContext(context);
+      setFlowPain({ regiao: pain.regiao, intensidade: pain.intensidade[0], gatilhos: pain.gatilhos });
+
+      toast({ title: 'Avaliação criada', description: `ID: ${assessmentId.slice(0, 8)}... Inicie a coleta de mídia.` });
       onNavigate?.('media-collector');
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
@@ -75,6 +117,8 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
     { key: 'pain', label: 'Dor' },
     { key: 'checklist', label: 'Captura' },
   ];
+
+  const canProceedStudent = selectedStudentId !== '';
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-20 md:pb-6">
@@ -109,15 +153,43 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
             <CardTitle className="flex items-center gap-2"><User className="h-5 w-5" /> Selecionar Aluno</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label>ID do Aluno (ou deixe vazio para usar próprio)</Label>
-              <Input
-                placeholder="UUID do aluno..."
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-              />
-            </div>
-            <Button onClick={() => setStep('context')}>Próximo <ArrowRight className="ml-2 h-4 w-4" /></Button>
+            {loadingStudents ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando alunos...
+              </div>
+            ) : students.length === 0 ? (
+              <div className="p-4 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-800 text-sm">
+                <AlertTriangle className="h-4 w-4 inline mr-2" />
+                Nenhum aluno vinculado. Adicione alunos na tela de Alunos primeiro.
+              </div>
+            ) : (
+              <div>
+                <Label>Aluno</Label>
+                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um aluno..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {students.map(s => (
+                      <SelectItem key={s.student_id} value={s.student_id}>
+                        {s.full_name || s.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {selectedStudent && (
+              <div className="p-3 rounded-lg border bg-muted/30">
+                <p className="text-sm font-medium">{selectedStudent.full_name}</p>
+                <p className="text-xs text-muted-foreground">{selectedStudent.email}</p>
+              </div>
+            )}
+
+            <Button onClick={() => setStep('context')} disabled={!canProceedStudent && students.length > 0}>
+              Próximo <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -240,6 +312,12 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
             <CardTitle className="flex items-center gap-2"><Camera className="h-5 w-5" /> Checklist de Captura</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {selectedStudent && (
+              <div className="p-3 rounded-lg border bg-primary/5">
+                <p className="text-sm"><strong>Aluno:</strong> {selectedStudent.full_name}</p>
+              </div>
+            )}
+
             <p className="text-sm text-muted-foreground">Views obrigatórias para a avaliação:</p>
             <div className="grid grid-cols-2 gap-3">
               {REQUIRED_VIEWS.map((view) => (
@@ -260,10 +338,17 @@ const AssessmentWizard = ({ onNavigate }: AssessmentWizardProps) => {
               </div>
             )}
 
+            {context.calcado && context.calcado !== 'descalco' && (
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-800">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-sm">⚠️ SHOE_INSTABILITY_CHECK: Calçado "{context.calcado}" pode afetar a análise de base</span>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep('pain')}>Voltar</Button>
               <Button onClick={handleCreateAssessment} disabled={saving}>
-                {saving ? 'Criando...' : 'Criar Avaliação e Iniciar Coleta'}
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Criando...</> : 'Criar Avaliação e Iniciar Coleta'}
               </Button>
             </div>
           </CardContent>
