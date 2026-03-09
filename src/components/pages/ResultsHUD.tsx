@@ -1,16 +1,72 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Activity, AlertTriangle, Brain, CheckCircle, Eye, RefreshCw, Zap } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Activity,
+  AlertTriangle,
+  Brain,
+  CheckCircle,
+  Eye,
+  RefreshCw,
+  Zap,
+  Flame,
+  Ruler,
+  BarChart3,
+} from 'lucide-react';
+import RiskGauges from '@/components/dashboard/RiskGauges';
+import HeatmapOverlay from '@/components/dashboard/HeatmapOverlay';
+import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
 
 type ResultStatus = 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
 
 const ResultsHUD = () => {
   const [status] = useState<ResultStatus>('pronto');
+  const [activeTab, setActiveTab] = useState('overview');
 
-  // Demo data
+  // Demo image (placeholder)
+  const demoImageUrl = '/placeholder.svg';
+
+  // Demo keypoints
+  const demoKeypoints = [
+    { name: 'nose', x: 250, y: 60, confidence: 0.95 },
+    { name: 'left_ear', x: 230, y: 55, confidence: 0.9 },
+    { name: 'right_ear', x: 270, y: 57, confidence: 0.9 },
+    { name: 'left_shoulder', x: 200, y: 130, confidence: 0.92 },
+    { name: 'right_shoulder', x: 300, y: 125, confidence: 0.93 },
+    { name: 'left_elbow', x: 170, y: 210, confidence: 0.88 },
+    { name: 'right_elbow', x: 330, y: 205, confidence: 0.87 },
+    { name: 'left_wrist', x: 160, y: 280, confidence: 0.82 },
+    { name: 'right_wrist', x: 340, y: 275, confidence: 0.83 },
+    { name: 'left_hip', x: 220, y: 300, confidence: 0.91 },
+    { name: 'right_hip', x: 280, y: 295, confidence: 0.92 },
+    { name: 'left_knee', x: 215, y: 420, confidence: 0.89 },
+    { name: 'right_knee', x: 285, y: 415, confidence: 0.9 },
+    { name: 'left_ankle', x: 210, y: 530, confidence: 0.85 },
+    { name: 'right_ankle', x: 290, y: 525, confidence: 0.86 },
+  ];
+
+  // Demo tension zones for heatmap
+  const demoTensionZones = [
+    { id: 'z1', name: 'Cervical Posterior', x: 50, y: 15, intensity: 78, myofascialLine: 'SBL' },
+    { id: 'z2', name: 'Trapézio Superior', x: 35, y: 22, intensity: 65, myofascialLine: 'LL' },
+    { id: 'z3', name: 'Lombar', x: 50, y: 55, intensity: 85, myofascialLine: 'SBL' },
+    { id: 'z4', name: 'Quadril Anterior', x: 45, y: 60, intensity: 55, myofascialLine: 'SFL' },
+    { id: 'z5', name: 'Joelho Medial E', x: 40, y: 78, intensity: 70, myofascialLine: 'DFL' },
+  ];
+
+  // Demo risk values
+  const risks = {
+    lumbar: 72,
+    cervical: 58,
+    base: 45,
+    overall: 62,
+  };
+
+  // HUD metric cards
   const hudCards = [
     { key: 'IEP', label: 'Estabilidade Podal', value: 72, icon: Activity, color: 'text-blue-600' },
     { key: 'EA', label: 'Espaço Articular', value: 58, icon: Zap, color: 'text-purple-600' },
@@ -39,6 +95,7 @@ const ResultsHUD = () => {
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Resultados</h1>
@@ -50,7 +107,7 @@ const ResultsHUD = () => {
         </Badge>
       </div>
 
-      {/* HUD Cards */}
+      {/* HUD Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {hudCards.map(card => {
           const Icon = card.icon;
@@ -69,7 +126,9 @@ const ResultsHUD = () => {
 
       {/* Motor Timeline */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Linha do Tempo do Motor</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Linha do Tempo do Motor</CardTitle>
+        </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2">
             {motorStages.map((stage, i) => (
@@ -87,24 +146,76 @@ const ResultsHUD = () => {
         </CardContent>
       </Card>
 
-      {/* Findings */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Achados ({findings.length})</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {findings.map(f => (
-              <div key={f.key} className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Badge className={getSeverityColor(f.severity)}>S{f.severity}</Badge>
-                  <span className="text-sm font-medium">{f.key.replace(/_/g, ' ')}</span>
-                  <Badge variant="outline" className="text-xs">{f.direction}</Badge>
-                </div>
-                <span className="text-xs text-muted-foreground">{Math.round(f.confidence * 100)}% conf.</span>
+      {/* Main Tabs: Overview / Análise Visual / Mapa de Calor / Achados */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-4 w-full">
+          <TabsTrigger value="overview" className="text-xs sm:text-sm">
+            <BarChart3 className="h-3 w-3 mr-1 hidden sm:inline" />
+            Riscos
+          </TabsTrigger>
+          <TabsTrigger value="analysis" className="text-xs sm:text-sm">
+            <Ruler className="h-3 w-3 mr-1 hidden sm:inline" />
+            Análise
+          </TabsTrigger>
+          <TabsTrigger value="heatmap" className="text-xs sm:text-sm">
+            <Flame className="h-3 w-3 mr-1 hidden sm:inline" />
+            Calor
+          </TabsTrigger>
+          <TabsTrigger value="findings" className="text-xs sm:text-sm">
+            <AlertTriangle className="h-3 w-3 mr-1 hidden sm:inline" />
+            Achados
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Risk Gauges */}
+        <TabsContent value="overview" className="space-y-4">
+          <RiskGauges
+            lumbarRisk={risks.lumbar}
+            cervicalRisk={risks.cervical}
+            baseRisk={risks.base}
+            overallScore={risks.overall}
+          />
+        </TabsContent>
+
+        {/* Tab: Analytic Canvas */}
+        <TabsContent value="analysis">
+          <AnalyticCanvas
+            imageUrl={demoImageUrl}
+            keypoints={demoKeypoints}
+          />
+        </TabsContent>
+
+        {/* Tab: Heatmap */}
+        <TabsContent value="heatmap">
+          <HeatmapOverlay
+            imageUrl={demoImageUrl}
+            tensionZones={demoTensionZones}
+          />
+        </TabsContent>
+
+        {/* Tab: Findings */}
+        <TabsContent value="findings" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Achados ({findings.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {findings.map(f => (
+                  <div key={f.key} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <Badge className={getSeverityColor(f.severity)}>S{f.severity}</Badge>
+                      <span className="text-sm font-medium">{f.key.replace(/_/g, ' ')}</span>
+                      <Badge variant="outline" className="text-xs">{f.direction}</Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{Math.round(f.confidence * 100)}% conf.</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
@@ -115,10 +226,20 @@ const ResultsHUD = () => {
 
       {/* Micro-state alerts */}
       {status === 'baixa_confianca' && (
-        <div className="p-3 rounded-lg border border-yellow-300 bg-yellow-50 flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          <span className="text-sm text-yellow-800">LOW_CONFIDENCE: Confiança abaixo do limite. Plano automático bloqueado.</span>
-        </div>
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            LOW_CONFIDENCE: Confiança abaixo do limite. Plano automático bloqueado.
+          </AlertDescription>
+        </Alert>
+      )}
+      {status === 'conflitante' && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            CONFLICTING_FINDINGS: Achados conflitantes detectados. Revisão manual obrigatória.
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );
