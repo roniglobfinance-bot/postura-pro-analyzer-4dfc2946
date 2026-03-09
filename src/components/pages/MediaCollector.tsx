@@ -4,14 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Upload, CheckCircle, XCircle, AlertTriangle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, AlertTriangle, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+
+interface MediaCollectorProps {
+  onNavigate?: (view: string) => void;
+}
 
 const MEDIA_STEPS = [
-  { key: 'frente', label: 'Frente', side: 'NA' },
-  { key: 'lado_d', label: 'Perfil Direito', side: 'D' },
-  { key: 'costas', label: 'Costas', side: 'NA' },
-  { key: 'lado_e', label: 'Perfil Esquerdo', side: 'E' },
+  { key: 'frente', label: 'Frente', side: 'NA', view: 'anterior' },
+  { key: 'lado_d', label: 'Perfil Direito', side: 'D', view: 'lateral_d' },
+  { key: 'costas', label: 'Costas', side: 'NA', view: 'posterior' },
+  { key: 'lado_e', label: 'Perfil Esquerdo', side: 'E', view: 'lateral_e' },
 ];
 
 type QAStatus = 'pending' | 'pass' | 'partial' | 'fail';
@@ -21,14 +27,19 @@ interface MediaItem {
   preview?: string;
   qaStatus: QAStatus;
   qaChecks: { feetVisible: boolean; fullSpine: boolean; flatPlane: boolean };
+  uploaded: boolean;
+  uploadUrl?: string;
 }
 
-const MediaCollector = () => {
+const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
+  const { active, setStatus: setFlowStatus } = useActiveAssessment();
   const [currentStep, setCurrentStep] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [media, setMedia] = useState<Record<string, MediaItem>>(
     Object.fromEntries(MEDIA_STEPS.map(s => [s.key, {
       qaStatus: 'pending',
       qaChecks: { feetVisible: false, fullSpine: false, flatPlane: false },
+      uploaded: false,
     }]))
   );
 
@@ -38,10 +49,21 @@ const MediaCollector = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Client-side validation
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Arquivo muito grande', description: 'Máximo 10MB por foto.', variant: 'destructive' });
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Formato inválido', description: 'Apenas imagens são aceitas.', variant: 'destructive' });
+      return;
+    }
+
     const preview = URL.createObjectURL(file);
     setMedia(prev => ({
       ...prev,
-      [current.key]: { ...prev[current.key], file, preview },
+      [current.key]: { ...prev[current.key], file, preview, uploaded: false },
     }));
   };
 
@@ -56,27 +78,110 @@ const MediaCollector = () => {
     });
   };
 
-  const getStatusBadge = (status: QAStatus) => {
+  const uploadSinglePhoto = async (stepKey: string) => {
+    const item = media[stepKey];
+    if (!item.file || !active.assessmentId) return null;
+
+    const stepDef = MEDIA_STEPS.find(s => s.key === stepKey)!;
+    const ext = item.file.name.split('.').pop();
+    const path = `${active.assessmentId}/${stepKey}.${ext}`;
+
+    // Upload to Supabase storage
+    const { error: uploadError } = await supabase.storage.from('photos').upload(path, item.file, {
+      upsert: true,
+      contentType: item.file.type,
+    });
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
+    const imageUrl = urlData.publicUrl;
+
+    // Insert media asset record
+    const { error: insertError } = await supabase.from('ppa_media_assets' as any).insert({
+      assessment_id: active.assessmentId,
+      image_url: imageUrl,
+      view: stepDef.view,
+      side: stepDef.side,
+      type: 'foto',
+      qa_status: item.qaStatus,
+      qa_reasons: Object.entries(item.qaChecks)
+        .filter(([, v]) => !v)
+        .map(([k]) => k),
+      capture_confidence: item.qaStatus === 'pass' ? 0.95 : item.qaStatus === 'partial' ? 0.7 : 0.4,
+    });
+    if (insertError) throw insertError;
+
+    return imageUrl;
+  };
+
+  const handleUploadAll = async () => {
+    if (!active.assessmentId) {
+      toast({ title: 'Erro', description: 'Nenhuma avaliação ativa. Crie uma avaliação primeiro.', variant: 'destructive' });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      for (const step of MEDIA_STEPS) {
+        const item = media[step.key];
+        if (item.file && !item.uploaded) {
+          const url = await uploadSinglePhoto(step.key);
+          if (url) {
+            setMedia(prev => ({
+              ...prev,
+              [step.key]: { ...prev[step.key], uploaded: true, uploadUrl: url },
+            }));
+          }
+        }
+      }
+
+      // Update assessment status
+      await supabase.from('ppa_assessments' as any)
+        .update({ status: 'analisando' })
+        .eq('id', active.assessmentId);
+
+      setFlowStatus('analisando');
+      toast({ title: 'Fotos enviadas', description: 'Todas as fotos foram salvas. Prossiga para análise.' });
+      onNavigate?.('results-hud');
+    } catch (err: any) {
+      toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const getStatusBadge = (status: QAStatus, uploaded: boolean) => {
+    if (uploaded) return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Enviado</Badge>;
     switch (status) {
       case 'pass': return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Pass</Badge>;
-      case 'partial': return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300"><AlertTriangle className="h-3 w-3 mr-1" /> Partial</Badge>;
+      case 'partial': return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300"><AlertTriangle className="h-3 w-3 mr-1" /> Parcial</Badge>;
       case 'fail': return <Badge className="bg-red-100 text-red-800 border-red-300"><XCircle className="h-3 w-3 mr-1" /> Fail</Badge>;
       default: return <Badge variant="outline">Pendente</Badge>;
     }
   };
 
-  const allMinimumPassed = MEDIA_STEPS.every(s => media[s.key].qaStatus === 'pass' || media[s.key].qaStatus === 'partial');
-
-  const handleAnalyze = () => {
-    toast({ title: 'Análise iniciada', description: 'Processando imagens com IA...' });
-  };
+  const allMinimumPassed = MEDIA_STEPS.every(s => {
+    const m = media[s.key];
+    return m.file && (m.qaStatus === 'pass' || m.qaStatus === 'partial');
+  });
+  const allUploaded = MEDIA_STEPS.every(s => media[s.key].uploaded);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-20 md:pb-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Coleta de Mídia</h1>
-        <p className="text-muted-foreground text-sm">Upload guiado das fotos obrigatórias com validação QA.</p>
+        <p className="text-muted-foreground text-sm">
+          Upload guiado das fotos obrigatórias com validação QA.
+          {active.studentName && <> — <strong>{active.studentName}</strong></>}
+        </p>
       </div>
+
+      {!active.assessmentId && (
+        <div className="p-4 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-800 text-sm">
+          <AlertTriangle className="h-4 w-4 inline mr-2" />
+          Nenhuma avaliação ativa. Volte para "Avaliações" e crie uma nova.
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="flex gap-2">
@@ -85,7 +190,9 @@ const MediaCollector = () => {
             key={s.key}
             onClick={() => setCurrentStep(i)}
             className={`flex-1 h-2 rounded-full transition-colors ${
-              i === currentStep ? 'bg-primary' : media[s.key].qaStatus === 'pass' ? 'bg-green-500' : 'bg-muted'
+              i === currentStep ? 'bg-primary' :
+              media[s.key].uploaded ? 'bg-green-500' :
+              media[s.key].qaStatus === 'pass' ? 'bg-green-400' : 'bg-muted'
             }`}
           />
         ))}
@@ -96,7 +203,7 @@ const MediaCollector = () => {
         {MEDIA_STEPS.map((s, i) => (
           <button key={s.key} onClick={() => setCurrentStep(i)} className="flex items-center gap-1">
             <span className="text-xs text-muted-foreground">{s.label}:</span>
-            {getStatusBadge(media[s.key].qaStatus)}
+            {getStatusBadge(media[s.key].qaStatus, media[s.key].uploaded)}
           </button>
         ))}
       </div>
@@ -106,40 +213,43 @@ const MediaCollector = () => {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{current.label}</span>
-            {getStatusBadge(currentMedia.qaStatus)}
+            {getStatusBadge(currentMedia.qaStatus, currentMedia.uploaded)}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {currentMedia.preview ? (
             <div className="relative">
               <img src={currentMedia.preview} alt={current.label} className="w-full max-h-80 object-contain rounded-lg border" />
-              <Button
-                variant="outline"
-                size="sm"
-                className="absolute top-2 right-2"
-                onClick={() => setMedia(prev => ({
-                  ...prev,
-                  [current.key]: { ...prev[current.key], file: undefined, preview: undefined, qaStatus: 'pending' },
-                }))}
-              >
-                Trocar foto
-              </Button>
+              {!currentMedia.uploaded && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={() => setMedia(prev => ({
+                    ...prev,
+                    [current.key]: { ...prev[current.key], file: undefined, preview: undefined, qaStatus: 'pending', uploaded: false },
+                  }))}
+                >
+                  Trocar foto
+                </Button>
+              )}
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
               <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-              <span className="text-sm text-muted-foreground">Clique para enviar foto</span>
+              <span className="text-sm text-muted-foreground">Clique para enviar foto ({current.label})</span>
+              <span className="text-xs text-muted-foreground mt-1">Máx 10MB • JPG/PNG</span>
               <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
             </label>
           )}
 
-          {currentMedia.file && (
+          {currentMedia.file && !currentMedia.uploaded && (
             <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
               <p className="text-sm font-medium">Validação QA:</p>
               {[
-                { key: 'feetVisible' as const, label: 'Pés visíveis' },
+                { key: 'feetVisible' as const, label: 'Pés visíveis na foto' },
                 { key: 'fullSpine' as const, label: 'Coluna inteira visível' },
-                { key: 'flatPlane' as const, label: 'Plano reto / sem inclinação' },
+                { key: 'flatPlane' as const, label: 'Plano reto / sem inclinação de câmera' },
               ].map(check => (
                 <div key={check.key} className="flex items-center gap-2">
                   <Checkbox
@@ -165,8 +275,14 @@ const MediaCollector = () => {
                 Próximo <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
-              <Button onClick={handleAnalyze} disabled={!allMinimumPassed}>
-                🔬 Analisar
+              <Button onClick={handleUploadAll} disabled={!allMinimumPassed || uploading || allUploaded || !active.assessmentId}>
+                {uploading ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
+                ) : allUploaded ? (
+                  <><CheckCircle className="h-4 w-4 mr-2" /> Enviado ✓</>
+                ) : (
+                  '📤 Enviar e Analisar'
+                )}
               </Button>
             )}
           </div>

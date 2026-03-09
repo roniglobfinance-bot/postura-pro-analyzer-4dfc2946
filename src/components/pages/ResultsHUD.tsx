@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -19,12 +19,14 @@ import {
   Loader2,
   Shield,
   FileText,
+  Save,
 } from 'lucide-react';
 import RiskGauges from '@/components/dashboard/RiskGauges';
 import HeatmapOverlay from '@/components/dashboard/HeatmapOverlay';
 import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
 
 type ResultStatus = 'idle' | 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
 
@@ -73,16 +75,75 @@ interface AIReport {
   clinical_summary: string;
 }
 
+interface SupabaseFindings {
+  finding_key: string;
+  direction: string | null;
+  severity: number;
+  confidence: number | null;
+}
+
+interface SupabaseMetric {
+  key: string;
+  value: number;
+  unit: string | null;
+  severity: number;
+}
+
+interface SupabaseCluster {
+  cluster_types: any;
+  score: number;
+}
+
 const ResultsHUD = () => {
+  const { active, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [activeTab, setActiveTab] = useState('overview');
   const [aiReport, setAiReport] = useState<AIReport | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string>('/placeholder.svg');
 
-  // Demo image (placeholder)
-  const demoImageUrl = '/placeholder.svg';
+  // Real data from Supabase
+  const [realFindings, setRealFindings] = useState<SupabaseFindings[]>([]);
+  const [realMetrics, setRealMetrics] = useState<SupabaseMetric[]>([]);
+  const [realClusters, setRealClusters] = useState<SupabaseCluster[]>([]);
 
-  // Demo keypoints
+  // Load real data when assessment is active
+  useEffect(() => {
+    if (!active.assessmentId) return;
+    loadAssessmentData();
+  }, [active.assessmentId, active.analysisRunId]);
+
+  const loadAssessmentData = async () => {
+    try {
+      // Load first photo for canvas
+      const { data: photos } = await supabase
+        .from('ppa_media_assets' as any)
+        .select('image_url, view')
+        .eq('assessment_id', active.assessmentId)
+        .limit(1);
+      
+      if (photos && (photos as any[]).length > 0) {
+        setPhotoUrl((photos as any[])[0].image_url);
+      }
+
+      // If we have an analysis run, load its data
+      if (active.analysisRunId) {
+        const [findingsRes, metricsRes, clustersRes] = await Promise.all([
+          supabase.from('ppa_findings' as any).select('*').eq('analysis_run_id', active.analysisRunId),
+          supabase.from('ppa_metrics' as any).select('*').eq('analysis_run_id', active.analysisRunId),
+          supabase.from('ppa_clusters' as any).select('*').eq('analysis_run_id', active.analysisRunId),
+        ]);
+        
+        if (findingsRes.data) setRealFindings(findingsRes.data as any[]);
+        if (metricsRes.data) setRealMetrics(metricsRes.data as any[]);
+        if (clustersRes.data) setRealClusters(clustersRes.data as any[]);
+      }
+    } catch (err) {
+      console.error('Error loading assessment data:', err);
+    }
+  };
+
   const demoKeypoints = [
     { name: 'nose', x: 250, y: 60, confidence: 0.95 },
     { name: 'left_ear', x: 230, y: 55, confidence: 0.9 },
@@ -101,12 +162,12 @@ const ResultsHUD = () => {
     { name: 'right_ankle', x: 290, y: 525, confidence: 0.86 },
   ];
 
-  // Default demo data when no AI report
+  // Default demo data when no AI report and no real data
   const defaultFindings = [
-    { key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
-    { key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
-    { key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
-    { key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
+    { finding_key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
+    { finding_key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
+    { finding_key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
+    { finding_key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
   ];
 
   const defaultTensionZones = [
@@ -117,7 +178,13 @@ const ResultsHUD = () => {
     { id: 'z5', name: 'Joelho Medial E', x: 40, y: 78, intensity: 70, myofascialLine: 'DFL' },
   ];
 
-  // Use AI data when available, fallback to demo
+  // Use real data > AI data > demo
+  const findingsForDisplay = aiReport
+    ? aiReport.findings_analysis.map(f => ({ key: f.key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: f.clinical_note }))
+    : realFindings.length > 0
+    ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction || 'anterior', severity: f.severity, confidence: f.confidence || 0, clinical_note: '' }))
+    : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: '' }));
+
   const risks = aiReport
     ? aiReport.risk_assessment
     : { lumbar_risk: 72, cervical_risk: 58, base_risk: 45, overall_score: 62 };
@@ -129,25 +196,8 @@ const ResultsHUD = () => {
     { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 30, icon: Activity, color: 'text-orange-600' },
   ];
 
-  const findings = aiReport
-    ? aiReport.findings_analysis.map(f => ({
-        key: f.key,
-        direction: f.direction,
-        severity: f.severity,
-        confidence: f.confidence,
-        clinical_note: f.clinical_note,
-      }))
-    : defaultFindings.map(f => ({ ...f, clinical_note: '' }));
-
   const tensionZones = aiReport
-    ? aiReport.tension_zones.map((z, i) => ({
-        id: `z${i}`,
-        name: z.name,
-        x: z.x,
-        y: z.y,
-        intensity: z.intensity,
-        myofascialLine: z.myofascial_line,
-      }))
+    ? aiReport.tension_zones.map((z, i) => ({ id: `z${i}`, name: z.name, x: z.x, y: z.y, intensity: z.intensity, myofascialLine: z.myofascial_line }))
     : defaultTensionZones;
 
   const motorStages = [
@@ -174,22 +224,47 @@ const ResultsHUD = () => {
     setIsAnalyzing(true);
     setStatus('processando');
     
+    // Use real data if available, otherwise demo
+    const findingsPayload = realFindings.length > 0
+      ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }))
+      : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }));
+
+    const metricsPayload = realMetrics.length > 0
+      ? realMetrics.map(m => ({ key: m.key, value: m.value, unit: m.unit, severity: m.severity }))
+      : [
+          { key: 'cranio_cervical_angle', value: 48, unit: 'degrees', severity: 2 },
+          { key: 'pelvic_tilt', value: 18, unit: 'degrees', severity: 1 },
+          { key: 'shoulder_imbalance', value: 3.5, unit: 'cm', severity: 1 },
+          { key: 'thoracic_kyphosis', value: 42, unit: 'degrees', severity: 2 },
+        ];
+
+    const clustersPayload = realClusters.length > 0
+      ? realClusters.map(c => ({ cluster_types: c.cluster_types, score: c.score }))
+      : [{ cluster_types: ['compressive_upper', 'instability_lower'], score: 68 }];
+
     try {
       const { data, error } = await supabase.functions.invoke('analyze-report', {
         body: {
-          findings: defaultFindings,
-          metrics: [
-            { key: 'cranio_cervical_angle', value: 48, unit: 'degrees', severity: 2 },
-            { key: 'pelvic_tilt', value: 18, unit: 'degrees', severity: 1 },
-            { key: 'shoulder_imbalance', value: 3.5, unit: 'cm', severity: 1 },
-            { key: 'thoracic_kyphosis', value: 42, unit: 'degrees', severity: 2 },
-          ],
-          clusters: [
-            { cluster_types: ['compressive_upper', 'instability_lower'], score: 68 },
-          ],
-          clientData: { name: 'Cliente', age: 35, height: 175, weight: 72 },
-          context: { footwear: 'tênis_corrida', surface: 'plano', objective: 'correção_postural', environment: 'indoor_iluminado' },
-          pain: { region: 'lombar', intensity: 5, triggers: 'sentado_prolongado' },
+          findings: findingsPayload,
+          metrics: metricsPayload,
+          clusters: clustersPayload,
+          clientData: {
+            name: active.studentName || 'Cliente',
+            age: 35,
+            height: 175,
+            weight: 72,
+          },
+          context: {
+            footwear: active.context.calcado || 'não_informado',
+            surface: active.context.superficie || 'plano',
+            objective: active.context.objetivo || 'correção_postural',
+            environment: active.context.ambiente || 'indoor',
+          },
+          pain: {
+            region: active.pain.regiao || 'não_informada',
+            intensity: active.pain.intensidade || 0,
+            triggers: active.pain.gatilhos || 'nenhum',
+          },
         },
       });
 
@@ -232,13 +307,97 @@ const ResultsHUD = () => {
     }
   };
 
+  // Save AI report to Supabase
+  const handleSaveReport = async () => {
+    if (!aiReport || !active.assessmentId) return;
+    setIsSaving(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Não autenticado');
+
+      // Create analysis run
+      const { data: runData, error: runError } = await supabase.from('ppa_analysis_runs' as any).insert({
+        assessment_id: active.assessmentId,
+        status: 'concluido',
+        model_version: 'gemini-3-flash',
+        confidence_final: aiReport.confidence_score,
+        dominant_vector: {
+          archetype: aiReport.postural_archetype,
+          mode: aiReport.operational_mode,
+        },
+      }).select('id').single();
+
+      if (runError) throw runError;
+      const runId = (runData as any).id;
+      setAnalysisRunId(runId);
+
+      // Save findings
+      if (aiReport.findings_analysis.length > 0) {
+        const findingsInsert = aiReport.findings_analysis.map(f => ({
+          analysis_run_id: runId,
+          finding_key: f.key,
+          direction: f.direction,
+          severity: f.severity,
+          confidence: f.confidence,
+          chain: { clinical_note: f.clinical_note },
+        }));
+        await supabase.from('ppa_findings' as any).insert(findingsInsert);
+      }
+
+      // Save metrics (HUD)
+      const metricsInsert = [
+        { analysis_run_id: runId, key: 'iep', value: aiReport.hud_metrics.iep, unit: '%', severity: aiReport.hud_metrics.iep < 50 ? 2 : 1 },
+        { analysis_run_id: runId, key: 'ea', value: aiReport.hud_metrics.ea, unit: '%', severity: aiReport.hud_metrics.ea < 50 ? 2 : 1 },
+        { analysis_run_id: runId, key: 'pts', value: aiReport.hud_metrics.pts, unit: '%', severity: aiReport.hud_metrics.pts < 50 ? 2 : 1 },
+        { analysis_run_id: runId, key: 'tns', value: aiReport.hud_metrics.tns, unit: '%', severity: aiReport.hud_metrics.tns > 50 ? 2 : 1 },
+        { analysis_run_id: runId, key: 'lumbar_risk', value: aiReport.risk_assessment.lumbar_risk, unit: '%', severity: aiReport.risk_assessment.lumbar_risk > 60 ? 3 : 1 },
+        { analysis_run_id: runId, key: 'cervical_risk', value: aiReport.risk_assessment.cervical_risk, unit: '%', severity: aiReport.risk_assessment.cervical_risk > 60 ? 3 : 1 },
+        { analysis_run_id: runId, key: 'base_risk', value: aiReport.risk_assessment.base_risk, unit: '%', severity: aiReport.risk_assessment.base_risk > 60 ? 3 : 1 },
+      ];
+      await supabase.from('ppa_metrics' as any).insert(metricsInsert);
+
+      // Save engine decision
+      await supabase.from('ppa_engine_decisions' as any).insert({
+        analysis_run_id: runId,
+        macro_state: aiReport.operational_mode,
+        risk_level: aiReport.risk_assessment.overall_score > 70 ? 'alto' : aiReport.risk_assessment.overall_score > 40 ? 'moderado' : 'baixo',
+        decided_by: 'gemini-auto',
+        micro_states: aiReport.guardrails.filter(g => g.triggered).map(g => g.code),
+        final_decision: {
+          mode: aiReport.operational_mode,
+          justification: aiReport.operational_justification,
+          protocol: aiReport.recovery_protocol,
+          diagnosis: aiReport.macro_diagnosis,
+          archetype: aiReport.postural_archetype,
+          clinical_summary: aiReport.clinical_summary,
+        },
+      });
+
+      // Update assessment status
+      await supabase.from('ppa_assessments' as any)
+        .update({ status: 'pronto' })
+        .eq('id', active.assessmentId);
+
+      setFlowStatus('pronto');
+      toast.success('Relatório salvo no Supabase!');
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Resultados</h1>
-          <p className="text-muted-foreground text-sm">Scanner Matricial + HUD de Análise</p>
+          <p className="text-muted-foreground text-sm">
+            Scanner Matricial + HUD de Análise
+            {active.studentName && <> — <strong>{active.studentName}</strong></>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {aiReport && (
@@ -254,6 +413,16 @@ const ResultsHUD = () => {
           </Badge>
         </div>
       </div>
+
+      {/* No assessment warning */}
+      {!active.assessmentId && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Nenhuma avaliação ativa selecionada. Os dados abaixo são demonstrativos.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* AI Report Banner */}
       {aiReport && (
@@ -324,56 +493,45 @@ const ResultsHUD = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="overview" className="text-xs sm:text-sm">
-            <BarChart3 className="h-3 w-3 mr-1 hidden sm:inline" />
-            Riscos
+            <BarChart3 className="h-3 w-3 mr-1 hidden sm:inline" />Riscos
           </TabsTrigger>
           <TabsTrigger value="analysis" className="text-xs sm:text-sm">
-            <Ruler className="h-3 w-3 mr-1 hidden sm:inline" />
-            Análise
+            <Ruler className="h-3 w-3 mr-1 hidden sm:inline" />Análise
           </TabsTrigger>
           <TabsTrigger value="heatmap" className="text-xs sm:text-sm">
-            <Flame className="h-3 w-3 mr-1 hidden sm:inline" />
-            Calor
+            <Flame className="h-3 w-3 mr-1 hidden sm:inline" />Calor
           </TabsTrigger>
           <TabsTrigger value="findings" className="text-xs sm:text-sm">
-            <AlertTriangle className="h-3 w-3 mr-1 hidden sm:inline" />
-            Achados
+            <AlertTriangle className="h-3 w-3 mr-1 hidden sm:inline" />Achados
           </TabsTrigger>
           <TabsTrigger value="protocol" className="text-xs sm:text-sm" disabled={!aiReport}>
-            <FileText className="h-3 w-3 mr-1 hidden sm:inline" />
-            Protocolo
+            <FileText className="h-3 w-3 mr-1 hidden sm:inline" />Protocolo
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab: Risk Gauges */}
         <TabsContent value="overview" className="space-y-4">
-          <RiskGauges
-            lumbarRisk={risks.lumbar_risk}
-            cervicalRisk={risks.cervical_risk}
-            baseRisk={risks.base_risk}
-            overallScore={risks.overall_score}
-          />
+          <RiskGauges lumbarRisk={risks.lumbar_risk} cervicalRisk={risks.cervical_risk} baseRisk={risks.base_risk} overallScore={risks.overall_score} />
         </TabsContent>
 
-        {/* Tab: Analytic Canvas */}
         <TabsContent value="analysis">
-          <AnalyticCanvas imageUrl={demoImageUrl} keypoints={demoKeypoints} />
+          <AnalyticCanvas imageUrl={photoUrl} keypoints={demoKeypoints} />
         </TabsContent>
 
-        {/* Tab: Heatmap */}
         <TabsContent value="heatmap">
-          <HeatmapOverlay imageUrl={demoImageUrl} tensionZones={tensionZones} />
+          <HeatmapOverlay imageUrl={photoUrl} tensionZones={tensionZones} />
         </TabsContent>
 
-        {/* Tab: Findings */}
         <TabsContent value="findings" className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Achados ({findings.length})</CardTitle>
+              <CardTitle className="text-sm">
+                Achados ({findingsForDisplay.length})
+                {realFindings.length > 0 && <Badge variant="outline" className="ml-2 text-xs">Dados reais</Badge>}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {findings.map(f => (
+                {findingsForDisplay.map(f => (
                   <div key={f.key} className="p-3 rounded-lg border space-y-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -393,11 +551,9 @@ const ResultsHUD = () => {
           </Card>
         </TabsContent>
 
-        {/* Tab: Protocol (AI only) */}
         <TabsContent value="protocol" className="space-y-4">
           {aiReport && (
             <>
-              {/* Operational Mode */}
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -412,7 +568,6 @@ const ResultsHUD = () => {
                 </CardContent>
               </Card>
 
-              {/* Recovery Protocol */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Protocolo de Recuperação - 3 Fases</CardTitle>
@@ -423,8 +578,7 @@ const ResultsHUD = () => {
                     <ul className="space-y-1">
                       {aiReport.recovery_protocol.phase_1_release.map((item, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-red-600 shrink-0" />
-                          {item}
+                          <CheckCircle className="h-4 w-4 text-red-600 shrink-0" />{item}
                         </li>
                       ))}
                     </ul>
@@ -434,8 +588,7 @@ const ResultsHUD = () => {
                     <ul className="space-y-1">
                       {aiReport.recovery_protocol.phase_2_activation.map((item, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-yellow-600 shrink-0" />
-                          {item}
+                          <CheckCircle className="h-4 w-4 text-yellow-600 shrink-0" />{item}
                         </li>
                       ))}
                     </ul>
@@ -445,8 +598,7 @@ const ResultsHUD = () => {
                     <ul className="space-y-1">
                       {aiReport.recovery_protocol.phase_3_integration.map((item, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-                          {item}
+                          <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />{item}
                         </li>
                       ))}
                     </ul>
@@ -454,7 +606,6 @@ const ResultsHUD = () => {
                 </CardContent>
               </Card>
 
-              {/* Clinical Summary */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Resumo Clínico</CardTitle>
@@ -471,13 +622,15 @@ const ResultsHUD = () => {
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
         <Button onClick={handleAnalyze} disabled={isAnalyzing}>
-          {isAnalyzing ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Brain className="h-4 w-4 mr-2" />
-          )}
+          {isAnalyzing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Brain className="h-4 w-4 mr-2" />}
           {isAnalyzing ? 'Analisando com Gemini...' : aiReport ? 'Reanalisar com IA' : 'Analisar com Gemini'}
         </Button>
+        {aiReport && (
+          <Button variant="outline" onClick={handleSaveReport} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            {isSaving ? 'Salvando...' : 'Salvar Relatório'}
+          </Button>
+        )}
         <Button variant="outline" disabled={!aiReport}>
           <Eye className="h-4 w-4 mr-2" /> Revisar Manualmente
         </Button>
@@ -490,17 +643,13 @@ const ResultsHUD = () => {
       {status === 'baixa_confianca' && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            LOW_CONFIDENCE: Confiança abaixo do limite. Plano automático bloqueado.
-          </AlertDescription>
+          <AlertDescription>LOW_CONFIDENCE: Confiança abaixo do limite. Plano automático bloqueado.</AlertDescription>
         </Alert>
       )}
       {status === 'conflitante' && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            CONFLICTING_FINDINGS: Achados conflitantes detectados. Revisão manual obrigatória.
-          </AlertDescription>
+          <AlertDescription>CONFLICTING_FINDINGS: Achados conflitantes detectados. Revisão manual obrigatória.</AlertDescription>
         </Alert>
       )}
     </div>
