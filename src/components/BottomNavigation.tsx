@@ -1,6 +1,4 @@
-
-import { useState } from 'react';
-import { Home, BarChart3, Dumbbell, Camera, Brain } from 'lucide-react';
+import { Home, BarChart3, Dumbbell, Camera, Brain, TrendingUp } from 'lucide-react';
 
 interface BottomNavigationProps {
   currentView: string;
@@ -14,6 +12,7 @@ const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) 
     { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
     { id: 'plan-builder', label: 'Plano', icon: Brain },
     { id: 'session-tracker', label: 'Sessões', icon: Dumbbell },
+    { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 
   return (
@@ -26,12 +25,12 @@ const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) 
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className={`flex flex-col items-center justify-center p-2 min-w-0 flex-1 transition-colors ${
+              className={`flex flex-col items-center justify-center p-1.5 min-w-0 flex-1 transition-colors ${
                 isActive ? 'text-[#2E5A88]' : 'text-gray-500'
               }`}
             >
-              <Icon className={`h-5 w-5 mb-1 ${isActive ? 'text-[#2E5A88]' : 'text-gray-500'}`} />
-              <span className={`text-xs truncate ${isActive ? 'text-[#2E5A88] font-medium' : 'text-gray-500'}`}>
+              <Icon className={`h-5 w-5 mb-0.5 ${isActive ? 'text-[#2E5A88]' : 'text-gray-500'}`} />
+              <span className={`text-[10px] truncate ${isActive ? 'text-[#2E5A88] font-medium' : 'text-gray-500'}`}>
                 {item.label}
               </span>
             </button>
