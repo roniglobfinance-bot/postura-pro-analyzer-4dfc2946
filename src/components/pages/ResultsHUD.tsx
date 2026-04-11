@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Activity, AlertTriangle, Brain, CheckCircle, Eye, RefreshCw, Zap, Flame, Ruler,
-  BarChart3, Loader2, Shield, FileText, Save, ArrowRight, MapPin,
+  BarChart3, Loader2, Shield, FileText, Save, ArrowRight, MapPin, ShieldAlert,
 } from 'lucide-react';
 import RiskGauges from '@/components/dashboard/RiskGauges';
 import HeatmapOverlay from '@/components/dashboard/HeatmapOverlay';
@@ -15,7 +15,7 @@ import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
-import { generateDiagnosticReport, DiagnosticInput } from '@/services/diagnosticEngine';
+import { generateDiagnosticReport, DiagnosticInput, FailSafeResult, NeuroMetabolicAlert } from '@/services/diagnosticEngine';
 
 interface ResultsHUDProps {
   onNavigate?: (view: string) => void;
@@ -58,6 +58,8 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const [realClusters, setRealClusters] = useState<SupabaseCluster[]>([]);
   const [localDiagnostics, setLocalDiagnostics] = useState<any>(null);
   const [gpsMapping, setGpsMapping] = useState<Record<string, any> | null>(null);
+  const [failSafes, setFailSafes] = useState<FailSafeResult | null>(null);
+  const [nmAlerts, setNmAlerts] = useState<NeuroMetabolicAlert[]>([]);
 
   useEffect(() => {
     if (!active.assessmentId) return;
@@ -84,7 +86,6 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
     } catch (err) { console.error('Error loading assessment data:', err); }
   };
 
-  // Convert AI findings to 9FIT flags and run local diagnostic engine
   const runLocalDiagnostics = (findings: AIReport['findings_analysis']) => {
     const flagMap: Record<string, string> = {
       'anteriorização_cervical': 'PEP14', 'anteriorização cabeça': 'PEP14', 'cabeça protusa': 'PEP14',
@@ -93,12 +94,20 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
       'hiperlordose': 'PEP09', 'hiperlordose_lombar': 'PEP09', 'lordose aumentada': 'PEP09',
       'anteversão_pélvica': 'PEP07', 'anteversão pélvica': 'PEP07',
       'retroversão_pélvica': 'PEP08', 'retroversão pélvica': 'PEP08',
+      'retificação lombar': 'PEP10', 'retificação_lombar': 'PEP10',
       'rotação_pélvica': 'PEP07', 'rotacao_pelvica': 'PEP07',
       'valgo_joelho': 'PEP04', 'valgo joelho': 'PEP04', 'genu valgo': 'PEP04',
       'valgo_dinamico': 'DYN01', 'valgo dinâmico': 'DYN01',
       'pé_pronado': 'PEP01', 'pé pronado': 'PEP01', 'pronação': 'PEP01',
       'escoliose': 'PEP15', 'escoliose_lombar': 'PEP15',
       'elevação_ombro': 'PEP13', 'ombro elevado': 'PEP13',
+      // NM/CTX/LES mappings from Gemini
+      'edema': 'NM01', 'formigamento': 'NM02', 'inflamação': 'NM03', 'sensibilidade nervosa': 'NM04',
+      'calçado instável': 'CTX01', 'calçado_instavel': 'CTX01',
+      'retrolistese': 'CTX03', 'osteopenia': 'CTX04',
+      'ruptura lca': 'LES01', 'lca': 'LES01',
+      'joanete': 'LES02', 'hallux valgus': 'LES02',
+      'bursite': 'LES03',
     };
 
     const flags: string[] = [];
@@ -111,24 +120,29 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
       }
     });
 
-    // Add pain flags based on context
+    // Pain flags from context
     if (active.pain.intensidade >= 2 && active.pain.regiao === 'lombar') flags.push('DOR02');
     if (active.pain.intensidade >= 3 && active.pain.regiao === 'lombar') flags.push('DOR03');
     if (active.pain.intensidade >= 2 && active.pain.regiao === 'joelho') flags.push('DOR04');
     if (active.pain.intensidade >= 2 && active.pain.regiao === 'cervical') flags.push('DOR06');
     if (active.pain.intensidade >= 2 && active.pain.regiao === 'ombro') flags.push('DOR07');
 
+    // Context flags from assessment
+    if (active.context.calcado === 'amortecido' || active.context.calcado === 'instável') flags.push('CTX01');
+    const age = Number(active.context.idade);
+    if (age && age > 70) flags.push('CTX02');
+
     if (flags.length > 0) {
       const input: DiagnosticInput = { flags };
       const report = generateDiagnosticReport(input);
       setLocalDiagnostics(report);
+      setFailSafes(report.failSafes);
+      setNmAlerts(report.neuroMetabolicAlerts);
     }
   };
 
-  // Build GPS postural from metrics
   const buildGPSMapping = (report: AIReport) => {
     const gps: Record<string, any> = report.biomech_gps || {};
-    // Derive from findings if not provided
     if (Object.keys(gps).length === 0) {
       report.findings_analysis.forEach(f => {
         const k = f.key.toLowerCase();
@@ -261,15 +275,23 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
       ]);
 
       await supabase.from('ppa_engine_decisions' as any).insert({
-        analysis_run_id: runId, macro_state: aiReport.operational_mode,
+        analysis_run_id: runId,
+        macro_state: failSafes?.forced_mode || aiReport.operational_mode,
         risk_level: aiReport.risk_assessment.overall_score > 70 ? 'alto' : aiReport.risk_assessment.overall_score > 40 ? 'moderado' : 'baixo',
         decided_by: 'gemini-auto',
-        micro_states: aiReport.guardrails.filter(g => g.triggered).map(g => g.code),
+        micro_states: [
+          ...aiReport.guardrails.filter(g => g.triggered).map(g => g.code),
+          ...(failSafes?.alerts.map(a => a.type) || []),
+        ],
         final_decision: {
-          mode: aiReport.operational_mode, justification: aiReport.operational_justification,
+          mode: failSafes?.forced_mode || aiReport.operational_mode,
+          justification: aiReport.operational_justification,
           protocol: aiReport.recovery_protocol, diagnosis: aiReport.macro_diagnosis,
           archetype: aiReport.postural_archetype, clinical_summary: aiReport.clinical_summary,
-          biomech_gps: gpsMapping, local_diagnoses: localDiagnostics?.diagnoses?.map((d: any) => d.diagnosis) || [],
+          biomech_gps: gpsMapping,
+          local_diagnoses: localDiagnostics?.diagnoses?.map((d: any) => d.diagnosis) || [],
+          fail_safes: failSafes,
+          neuro_metabolic_alerts: nmAlerts,
         },
       });
 
@@ -291,7 +313,8 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {aiReport && <Badge className={getModeColor(aiReport.operational_mode)}><Shield className="h-3 w-3 mr-1" />{aiReport.operational_mode}</Badge>}
+          {failSafes?.forced_mode && <Badge className="bg-red-100 text-red-800"><ShieldAlert className="h-3 w-3 mr-1" />SHIELD FORÇADO</Badge>}
+          {aiReport && !failSafes?.forced_mode && <Badge className={getModeColor(aiReport.operational_mode)}><Shield className="h-3 w-3 mr-1" />{aiReport.operational_mode}</Badge>}
           <Badge variant={status === 'pronto' ? 'default' : 'outline'}>
             {status === 'processando' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
             {status === 'idle' ? 'aguardando' : status}
@@ -313,9 +336,25 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
         </AlertDescription></Alert>
       )}
 
-      {/* Red flags */}
+      {/* Red flags from AI */}
       {aiReport?.red_flags?.map((rf, i) => (
         <Alert key={i} variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription>🔴 {rf.type}: {rf.message}</AlertDescription></Alert>
+      ))}
+
+      {/* Fail-safe alerts */}
+      {failSafes && failSafes.alerts.filter(a => a.severity === 'critical').map((a, i) => (
+        <Alert key={`fs-${i}`} variant="destructive"><ShieldAlert className="h-4 w-4" /><AlertDescription>
+          <strong>{a.type}:</strong> {a.message}
+          <p className="text-xs mt-1">{a.action}</p>
+        </AlertDescription></Alert>
+      ))}
+
+      {/* Neuro-metabolic alerts */}
+      {nmAlerts.filter(a => a.severity === 'critical').map((a, i) => (
+        <Alert key={`nm-${i}`} variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription>
+          <strong>🧠 {a.type}:</strong> {a.message}
+          <p className="text-xs mt-1">{a.recommendation}</p>
+        </AlertDescription></Alert>
       ))}
 
       {triggeredGuardrails.map((g, i) => (
@@ -339,11 +378,12 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-7 w-full">
           <TabsTrigger value="overview" className="text-xs">Riscos</TabsTrigger>
           <TabsTrigger value="analysis" className="text-xs">Análise</TabsTrigger>
           <TabsTrigger value="heatmap" className="text-xs">Calor</TabsTrigger>
           <TabsTrigger value="findings" className="text-xs">Achados</TabsTrigger>
+          <TabsTrigger value="safety" className="text-xs">Segurança</TabsTrigger>
           <TabsTrigger value="gps" className="text-xs">GPS</TabsTrigger>
           <TabsTrigger value="protocol" className="text-xs" disabled={!aiReport}>Protocolo</TabsTrigger>
         </TabsList>
@@ -385,7 +425,6 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
             </CardContent>
           </Card>
 
-          {/* Local Diagnostic Engine Results */}
           {localDiagnostics && localDiagnostics.diagnoses.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
@@ -402,6 +441,65 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
                     </div>
                     <p className="text-xs text-muted-foreground">Linhas: {d.affectedLines.join(', ')}</p>
                     <p className="text-xs text-muted-foreground">Protocolo: {d.protocolRef}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* SAFETY TAB — Fail-Safes + Neuro-Metabolic */}
+        <TabsContent value="safety" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4" /> Fail-Safes Ativos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {failSafes && failSafes.alerts.length > 0 ? (
+                <div className="space-y-3">
+                  {failSafes.alerts.map((a, i) => (
+                    <div key={i} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'border-red-300 bg-red-50' : 'border-yellow-300 bg-yellow-50'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge className={a.severity === 'critical' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}>{a.type}</Badge>
+                      </div>
+                      <p className="text-sm">{a.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">→ {a.action}</p>
+                    </div>
+                  ))}
+                  {failSafes.forced_mode && (
+                    <div className="p-3 rounded-lg border border-red-400 bg-red-100">
+                      <p className="text-sm font-bold text-red-800">⚠️ MODO FORÇADO: {failSafes.forced_mode}</p>
+                    </div>
+                  )}
+                  {failSafes.blocked_exercises.length > 0 && (
+                    <div className="p-3 rounded-lg border bg-muted/50">
+                      <p className="text-sm font-medium mb-2">Exercícios Bloqueados:</p>
+                      {failSafes.blocked_exercises.map((e, i) => (
+                        <p key={i} className="text-xs text-destructive">🚫 {e}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Execute a análise para verificar fail-safes (L1-S1, ADM Joelho, Stop Signs).</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {nmAlerts.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Brain className="h-4 w-4" /> Alertas Neuro-Metabólicos ({nmAlerts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {nmAlerts.map((a, i) => (
+                  <div key={i} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'border-red-300 bg-red-50' : 'border-orange-300 bg-orange-50'}`}>
+                    <p className="text-sm font-medium">{a.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">💊 {a.recommendation}</p>
                   </div>
                 ))}
               </CardContent>
@@ -445,12 +543,16 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
                   <div>
                     <h3 className="font-medium">Modo Operacional</h3>
                     <p className="text-sm text-muted-foreground mt-1">{aiReport.operational_justification}</p>
+                    {failSafes?.forced_mode && (
+                      <p className="text-xs text-destructive mt-1 font-medium">⚠️ Override por Fail-Safe: modo forçado para {failSafes.forced_mode}</p>
+                    )}
                   </div>
-                  <Badge className={`text-lg px-4 py-2 ${getModeColor(aiReport.operational_mode)}`}>{aiReport.operational_mode}</Badge>
+                  <Badge className={`text-lg px-4 py-2 ${getModeColor(failSafes?.forced_mode || aiReport.operational_mode)}`}>
+                    {failSafes?.forced_mode || aiReport.operational_mode}
+                  </Badge>
                 </div>
               </CardContent></Card>
 
-              {/* Intervention Blocks A/B/C */}
               {aiReport.intervention_blocks && (
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm">Blocos de Intervenção (Dossiê v3.2)</CardTitle></CardHeader>

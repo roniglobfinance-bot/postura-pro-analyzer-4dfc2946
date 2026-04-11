@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, CheckCircle, Lock, Shield, Zap, Brain, Loader2, ArrowRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Lock, Shield, Zap, Brain, Loader2, ArrowRight, Dumbbell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
@@ -27,7 +27,6 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
   const [dbProtocols, setDbProtocols] = useState<any[]>([]);
   const [loadingProtocols, setLoadingProtocols] = useState(true);
 
-  // Load engine decision
   useEffect(() => {
     if (!active.analysisRunId) return;
     const loadDecision = async () => {
@@ -44,7 +43,6 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
     loadDecision();
   }, [active.analysisRunId]);
 
-  // Load protocols from ppa_protocols_library
   useEffect(() => {
     const loadProtocols = async () => {
       const { data } = await supabase.from('ppa_protocols_library' as any).select('*').order('category');
@@ -54,6 +52,10 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
     loadProtocols();
   }, []);
 
+  // Check if fail-safes force SHIELD
+  const failSafes = engineDecision?.final_decision?.fail_safes;
+  const forcedShield = failSafes?.forced_mode === 'SHIELD';
+
   const guardrails = engineDecision?.micro_states
     ? [
         { key: 'SHOE_INSTABILITY_CHECK', active: (engineDecision.micro_states as string[]).includes('SHOE_INSTABILITY_CHECK'), message: 'Calçado amortecido com carga axial' },
@@ -61,13 +63,15 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
         { key: 'STABILITY_SHIELD', active: (engineDecision.micro_states as string[]).includes('STABILITY_SHIELD'), message: 'Instabilidade alta detectada' },
         { key: 'NEUROMUSCULAR_WAKEUP', active: (engineDecision.micro_states as string[]).includes('NEUROMUSCULAR_WAKEUP'), message: 'Déficit motor → wakeup obrigatório' },
         { key: 'PAIN_SPIKE_RISK', active: (engineDecision.micro_states as string[]).includes('PAIN_SPIKE_RISK'), message: 'Risco de pico de dor' },
+        { key: 'L1_S1_PROTECTED', active: (engineDecision.micro_states as string[]).includes('L1_S1_PROTECTED'), message: 'L1-S1 Protegido — Bloqueio de flexão/extensão lombar' },
+        { key: 'ADM_KNEE', active: (engineDecision.micro_states as string[]).includes('ADM_KNEE'), message: 'ADM Joelho Restrita (15°-90°)' },
+        { key: 'STOP_SIGN', active: (engineDecision.micro_states as string[]).includes('STOP_SIGN'), message: 'Stop Sign ativo — Deload imediato' },
       ]
     : [{ key: 'DECOMPRESSION_LOGIC', active: true, message: 'Cluster compressivo → descompressão obrigatória' }];
 
   const activeGuardrails = guardrails.filter(g => g.active);
-  const isLocked = activeGuardrails.length > 0 && mode === 'LOAD';
+  const isLocked = (activeGuardrails.length > 0 && mode === 'LOAD') || forcedShield;
 
-  // Group DB protocols by category, filter by active guardrails
   const activeCategories = new Set(activeGuardrails.map(g => {
     if (g.key === 'DECOMPRESSION_LOGIC') return 'decompression';
     if (g.key === 'NEUROMUSCULAR_WAKEUP') return 'wakeup';
@@ -79,16 +83,18 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
     ? dbProtocols.filter(p => activeCategories.has((p as any).category) || activeCategories.size === 0)
     : [];
 
-  // Fallback hardcoded blocks when DB is empty
   const fallbackBlocks = [
     { name: 'Wakeup Neural', icon: Brain, protocols: ['Mobilização Neural MMII', 'Cat-Camel Segmentar', 'Diafragma 360'] },
     { name: 'Descompressão', icon: Zap, protocols: ['Descompressão Axial Suspensa', 'Cat-Cow Respirado'] },
     { name: 'Escudo de Estabilidade', icon: Shield, protocols: ['Dead Bug', 'Bird Dog', 'Pallof Press'] },
   ];
 
+  // Fator Cleiton: Stiffness > Alongamento when LOAD + STABILITY_SHIELD
+  const showFatorCleiton = mode === 'LOAD' && activeGuardrails.some(g => g.key === 'STABILITY_SHIELD' || g.key === 'SHOE_INSTABILITY_CHECK');
+
   const handlePublish = async () => {
     if (isLocked) {
-      toast({ title: 'Bloqueado', description: 'Mude para SHIELD ou resolva guardrails.', variant: 'destructive' });
+      toast({ title: 'Bloqueado', description: forcedShield ? 'Fail-safe forçou SHIELD. Mude o modo.' : 'Mude para SHIELD ou resolva guardrails.', variant: 'destructive' });
       return;
     }
     if (!active.analysisRunId || !active.studentId) {
@@ -99,7 +105,6 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
 
     setSaving(true);
     try {
-      // Deactivate previous plans for this student
       await supabase.from('ppa_plan_links' as any)
         .update({ active: false })
         .eq('student_id', active.studentId)
@@ -126,7 +131,6 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
       return;
     }
 
-    // Persist override in ppa_engine_decisions
     if (active.analysisRunId) {
       await supabase.from('ppa_engine_decisions' as any).insert({
         analysis_run_id: active.analysisRunId,
@@ -167,10 +171,36 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
         </div>
       )}
 
+      {/* Forced SHIELD alert */}
+      {forcedShield && (
+        <div className="p-3 rounded-lg border border-red-400 bg-red-50 text-red-800 text-sm">
+          <strong>⚠️ SHIELD FORÇADO por Fail-Safe:</strong> O motor de segurança detectou condições que impedem modo LOAD.
+          {failSafes?.alerts?.map((a: any, i: number) => (
+            <p key={i} className="text-xs mt-1">• {a.message}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Fator Cleiton */}
+      {showFatorCleiton && (
+        <div className="p-3 rounded-lg border border-amber-400 bg-amber-50">
+          <div className="flex items-center gap-2">
+            <Dumbbell className="h-4 w-4 text-amber-700" />
+            <span className="text-sm font-medium text-amber-800">Fator Cleiton: Stiffness {'>'} Alongamento Passivo</span>
+          </div>
+          <p className="text-xs text-amber-700 mt-1">
+            Priorizar exercícios de estabilidade e stiffness articular. Alongamento passivo apenas no final, controlado. Remover alongamento relaxante pré-treino.
+          </p>
+          <p className="text-xs text-amber-600 mt-1 font-medium">
+            Ordem: Ativação → Estabilidade → Força → Alongamento (controlado)
+          </p>
+        </div>
+      )}
+
       {/* Mode selector */}
       <div className="flex gap-2">
         {(['LOAD', 'SHIELD', 'MIXED'] as PlanMode[]).map(m => (
-          <Button key={m} variant={mode === m ? 'default' : 'outline'} onClick={() => setMode(m)} className="flex-1">
+          <Button key={m} variant={mode === m ? 'default' : 'outline'} onClick={() => setMode(m)} className="flex-1" disabled={forcedShield && m === 'LOAD'}>
             {m === 'SHIELD' && <Shield className="h-4 w-4 mr-1" />}
             {m === 'LOAD' && <Zap className="h-4 w-4 mr-1" />}
             {m}
@@ -191,6 +221,20 @@ const PlanBuilder = ({ onNavigate }: PlanBuilderProps) => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Blocked exercises from fail-safes */}
+      {failSafes?.blocked_exercises?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-destructive">🚫 Exercícios Bloqueados</CardTitle></CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {failSafes.blocked_exercises.map((e: string, i: number) => (
+                <p key={i} className="text-xs text-destructive">🚫 {e}</p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Protocols from DB or fallback */}

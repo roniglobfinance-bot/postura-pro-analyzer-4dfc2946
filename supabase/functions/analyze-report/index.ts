@@ -19,18 +19,41 @@ serve(async (req) => {
 
     const systemPrompt = `Você é um especialista em biomecânica postural e análise clínica do sistema 9FIT PPA (Postura Pro Analyzer).
 
-Sua tarefa é analisar os dados de uma avaliação postural completa e gerar um relatório final integrado com:
-1. Diagnóstico macro consolidado
-2. Classificação de risco por região
-3. Correlação entre achados e linhas miofasciais (LSP, LPA, LL, LE, LFA, LBA)
-4. Recomendação de modo operacional (LOAD/SHIELD/MIXED)
-5. Protocolo de recuperação personalizado em 3 fases
-6. GPS Biomecânico (mapeamento de desvios posturais)
-7. Blocos de intervenção A/B/C conforme dossiê v3.2
-8. Detecção de Red Flags (falseio joelho, dor aguda, edema, formigamento)
-9. Alertas de segurança (guardrails)
+FILOSOFIA CENTRAL DO SISTEMA 9FIT:
+1. "A Estrutura Governa a Função" — Não se fortalece o que está bloqueado.
+2. "Postura como GPS, não Sentença" — Desvios posturais são mapas que indicam onde a força vaza.
+3. "Stiffness > Alongamento Passivo" (Fator Cleiton) — Estabilidade articular é mais importante que flexibilidade extrema para quem treina com carga. NUNCA prescrever alongamento passivo pré-treino.
 
-Use nomenclatura técnica 9FIT: IEP (Índice de Estabilidade Podal), EA (Espaço Articular), PTS (Potência de Transferência Segmentar), TNS (Tremor Neuromuscular Sistêmico).`;
+MÉTRICAS HUD:
+- IEP (Índice de Estabilidade Podal): 0-100, quão firme a base transfere força
+- EA (Espaço Articular): 0-100, nível de descompressão
+- PTS (Potência de Transferência Segmentar): 0-100, eficiência cinética
+- TNS (Tremor Neuromuscular Sistêmico): 0-100, fadiga do SNC (MENOR é melhor)
+
+MOTOR NEURO-METABÓLICO — DETECTAR:
+- Edema → contraindicar carga direta, prescrever drenagem
+- Formigamento → RED FLAG, recomendação médica imediata
+- Inflamação sistêmica → reduzir volume 40%
+- Sensibilidade nervosa → mobilização neural suave apenas
+
+FAIL-SAFES OBRIGATÓRIOS:
+- L1-S1 Protegido: Se dor lombar + desvio postural lombar → bloquear flexão lombar sob carga
+- ADM Joelho: Se dor joelho + valgo → restringir 15°-90°
+- Stop Signs: Dor > 3/10, edema, formigamento → modo SHIELD obrigatório
+
+CASOS CLÍNICOS DE REFERÊNCIA:
+- Caso Marília (LCA + Joanete): Valgo é de FUGA, não fraqueza isolada. Ancoragem de pé com Short Foot.
+- Caso Maria de Lourdes (78a, retrolistese, osteopenia, edema): Carga axial ZERO. Drenagem + mobilidade mínima.
+- Caso Cleiton (fisgada leg press): Calçado instável + alongamento relaxante pré-treino = falha de interface.
+- Caso Elisa (bursite + shift pélvico): Descompressão em cadeia fechada ANTES de qualquer carga.
+- Swayback ≠ Hiperlordose: Swayback tem RETROVERSÃO + retificação lombar (CG anterior). Hiperlordose tem ANTEVERSÃO.
+
+REGRAS DE INTERVENÇÃO:
+- Blocos A/B/C obrigatórios (Interface Solo → Quadril → Progressão de Carga)
+- Ordem: Ativação → Estabilidade → Força → Alongamento (controlado, no final)
+- NUNCA alongamento passivo pré-treino (Fator Cleiton)
+
+Sua tarefa é analisar os dados e gerar o relatório final integrado.`;
 
     const userPrompt = `Analise os seguintes dados da avaliação postural e gere o relatório final:
 
@@ -57,7 +80,13 @@ ${JSON.stringify(metrics || [], null, 2)}
 CLUSTERS:
 ${JSON.stringify(clusters || [], null, 2)}
 
-Gere o relatório final completo com GPS biomecânico, blocos de intervenção A/B/C e red flags.`;
+Gere o relatório final completo com:
+1. GPS biomecânico com mapeamento de desvios
+2. Blocos de intervenção A/B/C (Interface Solo, Quadril, Progressão)
+3. Red flags (edema, formigamento, dor aguda, falseio joelho)
+4. Aplicar Fator Cleiton: priorizar stiffness sobre alongamento
+5. Diferenciar Swayback de Hiperlordose se aplicável
+6. Considerar motor neuro-metabólico se sinais presentes`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -72,7 +101,7 @@ Gere o relatório final completo com GPS biomecânico, blocos de intervenção A
           type: 'function',
           function: {
             name: 'generate_postural_report',
-            description: 'Gera relatório final de análise postural estruturado com GPS e blocos de intervenção',
+            description: 'Gera relatório final de análise postural estruturado com GPS, blocos de intervenção e fail-safes',
             parameters: {
               type: 'object',
               properties: {
@@ -98,7 +127,7 @@ Gere o relatório final completo com GPS biomecânico, blocos de intervenção A
                 operational_justification: { type: 'string' },
                 biomech_gps: {
                   type: 'object',
-                  description: 'Mapeamento GPS biomecânico: retrope_valgo, pelvic_drift, valgo_dinamico, hiperlordose, hipercifose, stiffness_pe',
+                  description: 'Mapeamento GPS biomecânico',
                   properties: {
                     retrope_valgo: { type: 'object', properties: { detected: { type: 'boolean' }, severity: { type: 'number' } }, required: ['detected', 'severity'], additionalProperties: false },
                     pelvic_drift: { type: 'object', properties: { detected: { type: 'boolean' }, severity: { type: 'number' }, direction: { type: 'string' } }, required: ['detected', 'severity'], additionalProperties: false },
@@ -112,18 +141,18 @@ Gere o relatório final completo com GPS biomecânico, blocos de intervenção A
                 },
                 intervention_blocks: {
                   type: 'object',
-                  description: 'Blocos A/B/C do dossiê v3.2',
+                  description: 'Blocos A/B/C: Interface Solo, Quadril, Progressão de Carga',
                   properties: {
-                    block_a: { type: 'array', items: { type: 'string' }, description: 'Bloco A - Interface Solo: estabilidade do pé' },
-                    block_b: { type: 'array', items: { type: 'string' }, description: 'Bloco B - Quadril: controle lateral' },
-                    block_c: { type: 'array', items: { type: 'string' }, description: 'Bloco C - Progressão de carga' }
+                    block_a: { type: 'array', items: { type: 'string' }, description: 'Bloco A - Interface Solo: estabilidade do pé (Short Foot, isometria tornozelo)' },
+                    block_b: { type: 'array', items: { type: 'string' }, description: 'Bloco B - Quadril: controle lateral (abdução, hinge unilateral)' },
+                    block_c: { type: 'array', items: { type: 'string' }, description: 'Bloco C - Progressão de carga (step-down, agachamento parcial)' }
                   },
                   required: ['block_a', 'block_b', 'block_c'],
                   additionalProperties: false
                 },
                 red_flags: {
                   type: 'array',
-                  description: 'Red flags detectados: falseio joelho, dor aguda, edema, formigamento',
+                  description: 'Red flags: falseio joelho, dor aguda, edema, formigamento, sensibilidade nervosa',
                   items: {
                     type: 'object',
                     properties: { type: { type: 'string' }, message: { type: 'string' } },
@@ -153,7 +182,7 @@ Gere o relatório final completo com GPS biomecânico, blocos de intervenção A
                   type: 'array',
                   items: {
                     type: 'object',
-                    properties: { code: { type: 'string', enum: ['SHOE_INSTABILITY_CHECK', 'DECOMPRESSION_LOGIC', 'STABILITY_SHIELD', 'NEUROMUSCULAR_WAKEUP', 'PAIN_SPIKE_RISK'] }, triggered: { type: 'boolean' }, message: { type: 'string' } },
+                    properties: { code: { type: 'string', enum: ['SHOE_INSTABILITY_CHECK', 'DECOMPRESSION_LOGIC', 'STABILITY_SHIELD', 'NEUROMUSCULAR_WAKEUP', 'PAIN_SPIKE_RISK', 'L1_S1_PROTECTED', 'ADM_KNEE_RESTRICTED'] }, triggered: { type: 'boolean' }, message: { type: 'string' } },
                     required: ['code', 'triggered', 'message'],
                     additionalProperties: false
                   }
