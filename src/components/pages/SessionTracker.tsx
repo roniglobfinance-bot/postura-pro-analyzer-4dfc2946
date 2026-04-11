@@ -6,10 +6,12 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertTriangle, CheckCircle, Play, Square, Loader2, ArrowRight } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, CheckCircle, Play, Square, Loader2, ArrowRight, Clock, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import { analyzeSessionReadiness, PeriodizerResult, SessionHistory } from '@/services/smartPeriodizer';
 
 interface SessionTrackerProps {
   onNavigate?: (view: string) => void;
@@ -29,17 +31,18 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
   const [saving, setSaving] = useState(false);
   const [activePlan, setActivePlan] = useState<any>(null);
   const [planProtocols, setPlanProtocols] = useState<string[]>([]);
+  const [periodizerResult, setPeriodizerResult] = useState<PeriodizerResult | null>(null);
 
-  // Load active plan for student
+  // Load active plan + periodizer check
   useEffect(() => {
     if (!active.studentId) return;
-    const loadActivePlan = async () => {
+    const loadData = async () => {
+      // Load active plan
       const { data } = await supabase
         .from('ppa_plan_links' as any).select('*, ppa_analysis_runs!inner(assessment_id)')
         .eq('student_id', active.studentId).eq('active', true).limit(1).single();
       if (data) {
         setActivePlan(data);
-        // Load associated engine decision for protocol details
         const { data: decision } = await supabase
           .from('ppa_engine_decisions' as any).select('final_decision, macro_state')
           .eq('analysis_run_id', (data as any).analysis_run_id)
@@ -56,14 +59,44 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
           }
         }
       }
+
+      // Load recent sessions for Smart Periodizer
+      const { data: logs } = await supabase
+        .from('ppa_monitoring_logs' as any).select('*')
+        .eq('student_id', active.studentId)
+        .order('created_at', { ascending: false }).limit(10);
+      
+      if (logs) {
+        const sessions: SessionHistory[] = (logs as any[]).map(l => ({
+          session_id: l.session_id || l.id,
+          created_at: l.created_at,
+          integrity_result: l.integrity_result,
+          tns: l.tns || 0,
+          pain_delta: l.pain_delta || { pre: 0 },
+        }));
+        const result = analyzeSessionReadiness(sessions, painToday[0]);
+        setPeriodizerResult(result);
+      }
     };
-    loadActivePlan();
+    loadData();
   }, [active.studentId]);
+
+  // Re-run periodizer when pain changes
+  useEffect(() => {
+    if (periodizerResult) {
+      // Simple re-check - in production this would re-fetch
+      setPeriodizerResult(prev => prev ? { ...prev, session_ready: painToday[0] < 7 } : null);
+    }
+  }, [painToday]);
 
   const handleStartSession = () => {
     if (painToday[0] >= 8) {
       toast({ title: '⚠️ PAIN_SPIKE_ABORT', description: 'Dor muito alta. Sessão bloqueada.', variant: 'destructive' });
       setStatus('fail');
+      return;
+    }
+    if (periodizerResult && !periodizerResult.session_ready) {
+      toast({ title: '⚠️ Smart Periodizer', description: 'Sessão não recomendada. Verifique alertas.', variant: 'destructive' });
       return;
     }
     if (!shoeOk) toast({ title: '⚠️ SHOE_INSTABILITY_CHECK', description: 'Calçado inadequado.' });
@@ -83,7 +116,6 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
     }
   };
 
-  // Persist FAIL fallback: create new engine decision + update plan link
   const handleFallbackShield = async () => {
     toast({ title: '🛑 PAIN_SPIKE_ABORT', description: 'Fallback Shield ativado.', variant: 'destructive' });
 
@@ -105,7 +137,6 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
         },
       });
 
-      // Update plan link to inactive
       if (activePlan) {
         await supabase.from('ppa_plan_links' as any).update({ active: false }).eq('id', (activePlan as any).id);
       }
@@ -150,6 +181,36 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
         <Badge variant={status === 'fail' ? 'destructive' : status === 'finalizado' ? 'default' : 'outline'}>{status}</Badge>
       </div>
 
+      {/* Smart Periodizer Alerts */}
+      {periodizerResult && status === 'precheck' && periodizerResult.alerts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Smart Periodizer — Regra de 1 Hora
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {periodizerResult.alerts.map((a, i) => (
+              <div key={i} className={`p-2 rounded-lg border text-xs ${
+                a.severity === 'critical' ? 'border-red-300 bg-red-50 text-red-800' :
+                a.severity === 'warning' ? 'border-yellow-300 bg-yellow-50 text-yellow-800' :
+                'border-blue-200 bg-blue-50 text-blue-800'
+              }`}>
+                <p className="font-medium">{a.message}</p>
+                <p className="mt-1 opacity-80">{a.recommendation}</p>
+              </div>
+            ))}
+            <div className="flex gap-4 text-xs text-muted-foreground pt-1">
+              <span>⏱ Duração: {periodizerResult.recommended_duration_minutes}min</span>
+              <span>⏸ Micro-pausa: a cada {periodizerResult.micro_pause_interval_minutes}min</span>
+              {periodizerResult.volume_adjustment_percent !== 0 && (
+                <span className="text-destructive">📉 Volume: {periodizerResult.volume_adjustment_percent}%</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Active plan protocols */}
       {planProtocols.length > 0 && status === 'precheck' && (
         <Card>
@@ -170,11 +231,14 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
               <Label>Dor hoje: {painToday[0]}/10</Label>
               <Slider value={painToday} onValueChange={setPainToday} max={10} step={1} className="mt-2" />
               {painToday[0] >= 7 && <p className="text-xs text-destructive mt-1">⚠️ Dor alta — sessão pode ser bloqueada</p>}
+              {painToday[0] >= 3 && painToday[0] < 7 && <p className="text-xs text-yellow-600 mt-1">⚠️ Stop Sign: Dor {'>'} 3/10 — Modo SHIELD recomendado</p>}
             </div>
             <div className="flex items-center gap-2"><Checkbox checked={sleptWell} onCheckedChange={(v) => setSleptWell(!!v)} /><Label>Dormiu bem? (≥6h)</Label></div>
-            <div className="flex items-center gap-2"><Checkbox checked={shoeOk} onCheckedChange={(v) => setShoeOk(!!v)} /><Label>Calçado adequado?</Label></div>
+            <div className="flex items-center gap-2"><Checkbox checked={shoeOk} onCheckedChange={(v) => setShoeOk(!!v)} /><Label>Calçado adequado? (Fator Cleiton)</Label></div>
             {!sleptWell && <div className="p-2 rounded border border-yellow-200 bg-yellow-50 text-xs text-yellow-800">Sono insuficiente: reduza intensidade.</div>}
-            <Button onClick={handleStartSession}><Play className="h-4 w-4 mr-2" /> Iniciar Sessão</Button>
+            <Button onClick={handleStartSession} disabled={periodizerResult ? !periodizerResult.session_ready : false}>
+              <Play className="h-4 w-4 mr-2" /> Iniciar Sessão
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -186,6 +250,17 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
               <AlertTriangle className="h-4 w-4" /> MODO WATCH — Monitoramento elevado ativo
             </div>
           )}
+
+          {/* Micro-pause reminder */}
+          {periodizerResult && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                ⏸ Micro-pausa de mobilidade a cada {periodizerResult.micro_pause_interval_minutes}min (Cat-Cow, mobilidade torácica)
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Card>
             <CardHeader><CardTitle className="text-sm">Botões Rápidos</CardTitle></CardHeader>
             <CardContent>
@@ -202,7 +277,7 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
           <Card><CardContent className="p-4 space-y-3">
             <Label>TNS: {tns[0]}</Label>
             <Slider value={tns} onValueChange={setTns} max={100} step={1} />
-            {tns[0] > 70 && <p className="text-xs text-destructive">⚠️ TNS alto</p>}
+            {tns[0] > 70 && <p className="text-xs text-destructive">⚠️ TNS alto — Tremor de fadiga vs fuga</p>}
           </CardContent></Card>
           {events.length > 0 && (
             <Card><CardHeader><CardTitle className="text-sm">Eventos ({events.length})</CardTitle></CardHeader>
