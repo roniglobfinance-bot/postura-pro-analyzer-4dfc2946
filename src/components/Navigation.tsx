@@ -1,13 +1,8 @@
 import { Button } from '@/components/ui/button';
-import { 
-  Users, 
-  BarChart3,
-  BookOpen,
-  Scan,
-  Brain,
-  Camera,
-  TrendingUp
+import {
+  Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut
 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavigationProps {
   activeSection: string;
@@ -15,24 +10,38 @@ interface NavigationProps {
 }
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
-  const menuItems = [
+  const { userRole, signOut, user } = useAuth();
+  const isTeacher = userRole === 'teacher';
+
+  const teacherMenu = [
+    { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
+    { id: 'express', label: 'Express', icon: Zap },
     { id: 'clients', label: 'Alunos', icon: Users },
     { id: 'assessment-wizard', label: 'Avaliações', icon: Scan },
     { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
     { id: 'plan-builder', label: 'Plano', icon: Brain },
     { id: 'session-tracker', label: 'Sessões', icon: Camera },
+    { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
     { id: 'protocol-library', label: 'Biblioteca', icon: BookOpen },
+  ];
+
+  const studentMenu = [
+    { id: 'dashboard', label: 'Meu Painel', icon: LayoutDashboard },
+    { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
+    { id: 'session-tracker', label: 'Sessões', icon: Camera },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 
+  const menuItems = isTeacher ? teacherMenu : studentMenu;
+
   return (
-    <nav className="w-64 bg-white border-r border-gray-200 min-h-screen p-4">
+    <nav className="w-64 bg-white border-r border-gray-200 min-h-screen p-4 flex flex-col">
       <div className="mb-6 px-4 py-6 bg-gradient-to-br from-[#2E5A88] to-[#4CAF50] rounded-lg text-white">
         <h2 className="text-xl font-bold mb-1">PosturaPro</h2>
-        <p className="text-sm opacity-90">Sistema de Análise</p>
+        <p className="text-xs opacity-90">{isTeacher ? 'Modo Professor' : 'Modo Aluno'}</p>
       </div>
-      
-      <div className="space-y-2">
+
+      <div className="space-y-1 flex-1">
         {menuItems.map((item) => (
           <Button
             key={item.id}
@@ -44,6 +53,13 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
             {item.label}
           </Button>
         ))}
+      </div>
+
+      <div className="border-t pt-3 mt-3">
+        <p className="text-xs text-muted-foreground px-2 truncate mb-2">{user?.email}</p>
+        <Button variant="ghost" size="sm" className="w-full justify-start text-red-600" onClick={signOut}>
+          <LogOut className="mr-2 h-4 w-4" /> Sair
+        </Button>
       </div>
     </nav>
   );

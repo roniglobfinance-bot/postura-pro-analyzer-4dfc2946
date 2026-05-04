@@ -10,12 +10,24 @@ import PlanBuilder from '@/components/pages/PlanBuilder';
 import SessionTracker from '@/components/pages/SessionTracker';
 import ProtocolLibrary from '@/components/pages/ProtocolLibrary';
 import ProgressDashboard from '@/components/pages/ProgressDashboard';
+import TeacherDashboard from '@/components/dashboards/TeacherDashboard';
+import StudentDashboard from '@/components/dashboards/StudentDashboard';
+import ExpressAnalysis from '@/components/pages/ExpressAnalysis';
+import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
-  const [currentView, setCurrentView] = useState('clients');
+  const { userRole } = useAuth();
+  const isTeacher = userRole === 'teacher';
+  const [currentView, setCurrentView] = useState('dashboard');
 
   const renderCurrentView = () => {
     switch (currentView) {
+      case 'dashboard':
+        return isTeacher
+          ? <TeacherDashboard onNavigate={setCurrentView} />
+          : <StudentDashboard onNavigate={setCurrentView} />;
+      case 'express':
+        return <ExpressAnalysis onNavigate={setCurrentView} />;
       case 'clients':
         return <ClientManagement onNavigate={setCurrentView} />;
       case 'assessment-wizard':
@@ -33,7 +45,9 @@ const Index = () => {
       case 'progress-dashboard':
         return <ProgressDashboard />;
       default:
-        return <ClientManagement onNavigate={setCurrentView} />;
+        return isTeacher
+          ? <TeacherDashboard onNavigate={setCurrentView} />
+          : <StudentDashboard onNavigate={setCurrentView} />;
     }
   };
 

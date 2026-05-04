@@ -1,4 +1,5 @@
-import { Home, BarChart3, Dumbbell, Camera, Brain, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Camera, Brain, TrendingUp, Zap, Users } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface BottomNavigationProps {
   currentView: string;
@@ -6,14 +7,25 @@ interface BottomNavigationProps {
 }
 
 const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) => {
-  const navItems = [
-    { id: 'clients', label: 'Alunos', icon: Home },
-    { id: 'assessment-wizard', label: 'Avaliação', icon: Camera },
+  const { userRole } = useAuth();
+  const isTeacher = userRole === 'teacher';
+
+  const teacherItems = [
+    { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
+    { id: 'express', label: 'Express', icon: Zap },
+    { id: 'clients', label: 'Alunos', icon: Users },
     { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
-    { id: 'plan-builder', label: 'Plano', icon: Brain },
-    { id: 'session-tracker', label: 'Sessões', icon: Dumbbell },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
+
+  const studentItems = [
+    { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
+    { id: 'results-hud', label: 'Resultado', icon: BarChart3 },
+    { id: 'session-tracker', label: 'Sessão', icon: Camera },
+    { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
+  ];
+
+  const navItems = isTeacher ? teacherItems : studentItems;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 md:hidden">
