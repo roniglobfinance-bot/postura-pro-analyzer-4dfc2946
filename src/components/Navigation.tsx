@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import {
-  Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut
+  Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut,
+  Video, MessageSquare, Activity, FileText, ListChecks
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
