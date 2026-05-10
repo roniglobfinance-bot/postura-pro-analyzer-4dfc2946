@@ -1,108 +1,198 @@
+# Plano: Evolução para "Postura Pro Analyser → Movement Analyser"
 
+## Diagnóstico
 
-# Plano: Integrar Checklist Master no Ecossistema 9FIT
-
-## Diagnostico: O que ja existe vs o que falta
-
-| Item do Checklist | Status | Lacuna |
-|---|---|---|
-| Filosofia "Stiffness > Alongamento" | Parcial | Nao ha logica de Stiffness no engine; falta "Fator Cleiton" |
-| Motor Biomecanico | OK | Scanner matricial funciona via diagnosticEngine |
-| Motor Neuro-Metabolico | FALTA | Nenhuma logica de edema, inflamacao sistemica, sensibilidade nervosa |
-| Smart Periodizer ("Regra 1 Hora") | FALTA | Nenhuma gestao de carga temporal |
-| Caso Marilia (LCA + Joanete) | FALTA | Nenhuma regra no knowledgeBase |
-| Caso Maria de Lourdes (78a) | FALTA | Nenhuma regra de carga axial ZERO, contraindicacoes por idade |
-| Caso Cleiton (Leg Press) | FALTA | Nenhuma regra de interface de calcado |
-| Caso Elisa (Bursite) | FALTA | Nenhuma regra de descompressao lateral |
-| Casos Julia/Fernanda (Hiperlordose vs Swayback) | FALTA | diagnosticRules nao diferencia os dois |
-| HUD Metrics (IEP/EA/PTS/TNS) | OK | Exibidos no ResultsHUD |
-| L1-S1 Protegido | FALTA | Nenhum fail-safe no engine |
-| ADM de Joelho | FALTA | Nenhuma regra de angulo de seguranca |
-| Stop Signs (dor > 3/10) | Parcial | SessionTracker tem pain check, mas engine nao bloqueia |
+1. **Aluno e Professor compartilham UI/funções idênticas** — ambos veem mesmos módulos (Resultados, Sessões, Evolução) sem diferenciação operacional real.
+2. **Não há entrega Professor→Aluno** — o que o profissional analisa/prescreve não chega ao aluno como produto consumível (relatório, plano, recomendações).
+3. **Sistema só analisa postura estática** — falta análise de movimento, queixas textuais, histórico, composição corporal por foto.
+4. **Conhecimento clínico (Dossiê) não está embebido no engine/IA** — padrões 9FIT, Lei dos 0.4cm, Tríade Neuro-Metabólica etc. não alimentam diagnóstico nem treinam o prompt.
 
 ---
 
-## Implementacao
+## Estratégia em 4 Frentes
 
-### 1. Expandir knowledgeBase.ts — Casos Clinicos + Motor Neuro-Metabolico
+### Frente A — Separação Operacional Professor vs Aluno
 
-Adicionar ao `evaluationFlags`:
-- Flags neuro-metabolicos: `NM01` (Edema), `NM02` (Formigamento), `NM03` (Inflamacao Sistemica), `NM04` (Sensibilidade Nervosa)
-- Flags de contexto: `CTX01` (Calcado Instavel), `CTX02` (Idade > 70), `CTX03` (Retrolistese), `CTX04` (Osteopenia)
-- Flags de lesao: `LES01` (Ruptura LCA), `LES02` (Joanete), `LES03` (Bursite)
+**Professor (operador clínico):**
+- Painel: KPIs, fila de avaliações pendentes, alertas red-flag dos alunos
+- Workspace: Express Analysis, Wizard completo, Movement Analyser, Editor de Plano, Editor de Relatório
+- Entrega: botão "Publicar para Aluno" → grava `report_id` + `plan_id` ativos no `ppa_plan_links`
 
-Adicionar ao `diagnosticRules` (7 novos casos clinicos):
-- `DIAG_MARILIA`: LES01 + LES02 + DYN01 → Valgo de fuga, protocolo Short Foot + isometria
-- `DIAG_MARIA_LOURDES`: CTX02 + CTX03 + CTX04 + NM01 → Carga axial ZERO, drenagem extremidades
-- `DIAG_CLEITON`: CTX01 + DOR03 → Falha de interface, remocao alongamento pre-treino, base rigida
-- `DIAG_ELISA`: LES03 + PEP08 → Shift pelvico + bursite, descompressao cadeia fechada
-- `DIAG_SWAYBACK`: PEP08 + PEP10 → Swayback (diferenciado de hiperlordose), ativacao core profundo
-- `DIAG_HIPERLORDOSE_FUNCIONAL`: PEP07 + PEP09 → Hiperlordose funcional com reposicionamento CG
+**Aluno (consumidor da entrega):**
+- Painel: card "Seu último relatório" + "Plano ativo da semana" + "Próxima sessão"
+- Telas read-only: Relatório (PDF/HTML), Plano (lista exercícios + vídeo demo), Recomendações (texto + checklist 24h/48h)
+- Telas interativas: Check-in diário (dor 0-10, TNS, sintomas tardios), marcar sessão concluída
+- **Não vê:** Wizard, Express, Editor de Plano, Biblioteca técnica
 
-Adicionar novos `interventionProtocols`:
-- `PROTOCOLO_LCA_JOANETE` (Caso Marilia)
-- `PROTOCOLO_IDOSO_FRAGIL` (Caso Maria de Lourdes)
-- `PROTOCOLO_INTERFACE_SOLO` (Caso Cleiton/Fator Cleiton)
-- `PROTOCOLO_DESCOMPRESSAO_LATERAL` (Caso Elisa)
-- `PROTOCOLO_SWAYBACK` (diferenciado do PROTOCOLO_ANTEVERSAO)
+Componentes novos:
+- `src/components/student/StudentReportView.tsx` (consome último `analysis_run` + `engine_decision`)
+- `src/components/student/StudentPlanView.tsx` (consome `ppa_plan_links` ativo)
+- `src/components/student/StudentRecommendations.tsx` (recomendações nutri + estase + alertas)
+- `src/components/student/DailyCheckIn.tsx` (já parcial — expandir com sintomas 24h/48h)
+- `src/components/teacher/PublishToStudent.tsx` (botão + modal de revisão antes de publicar)
 
-### 2. Adicionar Fail-Safes ao diagnosticEngine.ts
+### Frente B — Movement Analyser (Evolução do Postura Pro)
 
-Criar funcao `applyFailSafes(diagnoses, flags)`:
-- **L1-S1 Protegido**: Se flags incluem DOR02/DOR03 + PEP09, bloquear exercicios com flexao lombar sob carga e extensao extrema
-- **ADM Joelho**: Se flags incluem DOR04/DOR05 + PEP04/PEP06, restringir angulos a 15-90 graus
-- **Stop Signs**: Se dor > 3/10 ou NM02 (formigamento) ou NM01 (edema), forcar modo SHIELD e adicionar alerta "Deload imediato"
-- Cada fail-safe retorna `{ blocked_exercises: string[], forced_mode: 'SHIELD' | null, alert: string }`
+Renomear conceitualmente e adicionar 4 novos módulos de análise:
 
-### 3. Criar Smart Periodizer — Regra de 1 Hora
+1. **Movement Analysis (vídeo de exercício)**
+   - Upload de vídeo curto (agachamento, hinge, marcha)
+   - MediaPipe Pose por frame → trajetória de keypoints
+   - Detecta: valgo dinâmico, shift pélvico, perda de neutralidade lombar, ROM
+   - Componente: `src/components/pages/MovementAnalyser.tsx`
+   - Service: `src/services/movementAnalysisService.ts` (frame sampling + ângulos articulares no tempo)
 
-Novo servico `src/services/smartPeriodizer.ts`:
-- Entrada: historico de sessoes (de `ppa_monitoring_logs`), metricas atuais
-- Logica: se aluno treinou > 1h sem pausa de movimento, alertar risco de estase e desidratacao discal
-- Saida: recomendacao de micro-pausas, ajuste de volume, alerta no SessionTracker
-- Integrar no SessionTracker como check pre-sessao adicional
+2. **Textual Complaint Analyser**
+   - Textarea: "Descreva sua dor/limitação"
+   - Edge function chama Gemini com prompt clínico do Dossiê → extrai: região, padrão (mecânico/neural/inflamatório), red flags, mapeia para arquétipo 9FIT
+   - Componente: `src/components/analyser/ComplaintAnalyser.tsx`
+   - Edge: `supabase/functions/analyze-complaint/index.ts`
 
-### 4. Motor Neuro-Metabolico no diagnosticEngine.ts
+3. **Historical Trend Analyser**
+   - Lê todas as `ppa_assessments` + `ppa_monitoring_logs` do aluno
+   - Gemini gera narrativa de evolução: "dor lombar caiu 40%, TNS estável, surge novo padrão de valgo direito"
+   - Componente: integrado em `ProgressDashboard.tsx`
+   - Edge: `supabase/functions/analyze-history/index.ts`
 
-Nova funcao `analyzeNeuroMetabolic(flags)`:
-- Cruzar flags de dor (DOR*) com flags neuro-metabolicos (NM*)
-- Se edema + dor articular → contraindicar carga direta, prescrever drenagem
-- Se formigamento → red flag, recomendacao medica imediata
-- Saida integrada ao `generateDiagnosticReport` como campo adicional `neuroMetabolicAlerts`
+4. **Body Composition Estimator (foto)**
+   - 2 fotos (frente + lado) com calibração por altura
+   - Estimativa de % gordura/massa magra via Gemini Vision (heurística visual + tabelas antropométricas)
+   - Disclaimer claro: "estimativa visual, não substitui DEXA"
+   - Componente: `src/components/analyser/BodyCompositionEstimator.tsx`
+   - Edge: `supabase/functions/analyze-body-composition/index.ts`
 
-### 5. Integrar Filosofia "Stiffness > Alongamento" no PlanBuilder
+Reorganização de navegação Professor:
+```
+Painel | Alunos | Analyser ▾ (Postura | Movimento | Queixa | Composição | Histórico) | Plano | Sessões | Biblioteca
+```
 
-Atualizar `PlanBuilder.tsx`:
-- Quando modo = LOAD e guardrail `STABILITY_SHIELD` ativo: priorizar exercicios de estabilidade/stiffness sobre alongamento passivo
-- Label visual: "Fator Cleiton: Estabilidade antes de flexibilidade"
-- Reordenar blocos de protocolo: Ativacao → Estabilidade → Forca, com alongamento so no final e controlado
+### Frente C — Embutir Dossiê de Inteligência no Engine
 
-### 6. Atualizar Edge Function analyze-report
+Atualizar `src/data/knowledgeBase.ts` e `src/services/diagnosticEngine.ts` com os **5 Padrões 9FIT** como regras compostas:
 
-Adicionar ao system prompt do Gemini:
-- Regra filosofica: "Stiffness > Alongamento Passivo" (Fator Cleiton)
-- Deteccao de Motor Neuro-Metabolico: edema, formigamento, inflamacao sistemica
-- Smart Periodizer: considerar historico de volume/frequencia
-- Casos clinicos como exemplos de raciocinio (few-shot)
+| Padrão | Trigger (flags) | Diagnóstico | Protocolo |
+|---|---|---|---|
+| **Lei dos 0.4cm** | `pelvic_imbalance >= 0.4cm` + `unilateral_foot_pain` | Cascata ascendente | Bloco A reforçado (Short Foot bilateral assimétrico) |
+| **Bloqueio Neural Marcha (Psoas)** | `gait_block` + `lumbar_history` | Freio neural psoas | Dissociação segmentar + IAP |
+| **Conflito Posterior** | `lumbar_pain` + `extension_intolerance` | Baastrup/Retrolistese | VETO extensão + bracing |
+| **Falha de Interface** | `dynamic_valgus` + `unstable_footwear_context` | Calçado instável | Trocar calçado + stiffness, NÃO alongar |
+| **Tríade Neuro-Metabólica** | `nm_edema` + `nm_tingling` + `pain_increase_24h` | Estase + inflamação | SHIELD + drenagem + protocolo desinflamação 48h |
 
-### 7. Atualizar ResultsHUD — Exibir Fail-Safes e Alertas NM
+Adicionar novas tabelas/campos:
+- `ppa_findings.finding_key` ganha enums: `pelvic_4mm`, `psoas_brake`, `posterior_conflict`, `interface_failure`, `nm_triad`
+- Novo serviço `src/services/ninefitPatterns.ts` com função `detectPatterns(findings, metrics, context, painLog) → Pattern[]`
 
-- Nova secao "Seguranca" na aba de achados com fail-safes ativos (L1-S1, ADM Joelho, Stop Signs)
-- Alertas neuro-metabolicos com badge vermelho
-- Smart Periodizer: exibir recomendacao de volume na aba Protocolo
+### Frente D — Treinar a IA com o Dossiê
+
+Refatorar prompts dos edge functions (`analyze-posture`, `analyze-report`, novos `analyze-complaint`, `analyze-movement`, `analyze-history`, `analyze-body-composition`) para incluir:
+
+1. **System prompt único compartilhado** em `supabase/functions/_shared/clinical-knowledge.ts`:
+   - Filosofia 9FIT
+   - 6 categorias do Dossiê (Bioengenharia, Funcional, Nutricional, Neuromecânica, Estase, Casos Longos)
+   - 5 Padrões clínicos como exemplos few-shot
+   - Casos benchmark (Coluna de Pino, Ruptura+Joanete)
+
+2. **Tool calling estruturado** para cada análise retornar `pattern_match: PatternKey | null` além do diagnóstico narrativo.
+
+3. **Feedback loop**: nova tabela `ai_analysis_feedback` (teacher_id, analysis_run_id, was_accurate boolean, correction_text) — alimenta dataset futuro de fine-tuning.
 
 ---
 
-## Arquivos Afetados
+## Banco de Dados (Migration)
 
-| Arquivo | Acao |
-|---|---|
-| `src/data/knowledgeBase.ts` | +4 flags NM, +4 flags CTX, +3 flags LES, +6 regras diagnosticas, +5 protocolos |
-| `src/services/diagnosticEngine.ts` | +applyFailSafes(), +analyzeNeuroMetabolic(), expandir generateDiagnosticReport |
-| `src/services/smartPeriodizer.ts` | NOVO — Regra 1 Hora + gestao de carga |
-| `src/components/pages/PlanBuilder.tsx` | Stiffness > Alongamento, Fator Cleiton |
-| `src/components/pages/ResultsHUD.tsx` | Secao Seguranca, alertas NM |
-| `src/components/pages/SessionTracker.tsx` | Check Smart Periodizer pre-sessao |
-| `supabase/functions/analyze-report/index.ts` | Filosofia + casos clinicos no prompt |
-| `src/services/flagConversionService.ts` | Mapear findings NM/CTX/LES do Gemini para flags |
+```sql
+-- Publicação Professor → Aluno
+ALTER TABLE ppa_plan_links 
+  ADD COLUMN published_at timestamptz,
+  ADD COLUMN report_html text,
+  ADD COLUMN recommendations jsonb DEFAULT '[]';
 
+-- Análise de movimento
+CREATE TABLE ppa_movement_analyses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  assessment_id uuid NOT NULL,
+  exercise_type text NOT NULL,
+  video_url text,
+  keypoint_trajectory jsonb,
+  detected_faults jsonb DEFAULT '[]',
+  rom_data jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Análise de queixas textuais
+CREATE TABLE ppa_complaint_analyses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  assessment_id uuid NOT NULL,
+  raw_text text NOT NULL,
+  extracted_region text,
+  pattern_type text,
+  red_flags jsonb DEFAULT '[]',
+  ai_interpretation text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Composição corporal estimada
+CREATE TABLE ppa_body_composition (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  assessment_id uuid NOT NULL,
+  front_photo_url text,
+  side_photo_url text,
+  estimated_body_fat_pct numeric,
+  estimated_lean_mass_kg numeric,
+  confidence numeric,
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Feedback IA
+CREATE TABLE ai_analysis_feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  analysis_run_id uuid NOT NULL,
+  teacher_id uuid NOT NULL,
+  was_accurate boolean,
+  correction_text text,
+  created_at timestamptz DEFAULT now()
+);
+```
++ RLS por teacher/student em cada tabela.
+
+---
+
+## Arquivos Tocados
+
+**Novos (~12):**
+- `src/components/student/StudentReportView.tsx`
+- `src/components/student/StudentPlanView.tsx`
+- `src/components/student/StudentRecommendations.tsx`
+- `src/components/teacher/PublishToStudent.tsx`
+- `src/components/pages/MovementAnalyser.tsx`
+- `src/components/analyser/ComplaintAnalyser.tsx`
+- `src/components/analyser/BodyCompositionEstimator.tsx`
+- `src/services/movementAnalysisService.ts`
+- `src/services/ninefitPatterns.ts`
+- `supabase/functions/_shared/clinical-knowledge.ts`
+- `supabase/functions/analyze-complaint/index.ts`
+- `supabase/functions/analyze-movement/index.ts`
+- `supabase/functions/analyze-body-composition/index.ts`
+- `supabase/functions/analyze-history/index.ts`
+
+**Editados (~10):**
+- `src/components/dashboards/StudentDashboard.tsx` — consumir entrega publicada
+- `src/components/dashboards/TeacherDashboard.tsx` — botão publicar + KPIs
+- `src/components/Navigation.tsx` + `BottomNavigation.tsx` — submenu Analyser
+- `src/pages/Index.tsx` — rotas novas
+- `src/services/diagnosticEngine.ts` — integrar `ninefitPatterns`
+- `src/data/knowledgeBase.ts` — 5 padrões + casos
+- `supabase/functions/analyze-report/index.ts` — usar `_shared/clinical-knowledge`
+- `supabase/functions/analyze-posture/index.ts` — idem
+
+---
+
+## Sequência de Implementação
+
+1. Migration (tabelas + RLS) + shared clinical-knowledge
+2. Frente C: ninefitPatterns + diagnosticEngine atualizado
+3. Frente A: separação Professor/Aluno + entrega publicada
+4. Frente B: 4 novos analysers (Movement, Complaint, Body Comp, History)
+5. Frente D: refatorar todos prompts para usar shared knowledge + feedback loop
+6. Navegação reorganizada + smoke test end-to-end
