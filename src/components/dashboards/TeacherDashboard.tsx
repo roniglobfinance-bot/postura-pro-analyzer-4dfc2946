@@ -130,12 +130,15 @@ const TeacherDashboard = ({ onNavigate }: Props) => {
                       <p className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString('pt-BR')}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    setAssessment(a.id, a.student_id, a.student_name || '');
-                    onNavigate(a.status === 'em_coleta' ? 'media-collector' : 'results-hud');
-                  }}>
-                    Abrir <ArrowRight className="h-4 w-4 ml-1" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <PublishToStudent studentId={a.student_id} />
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setAssessment(a.id, a.student_id, a.student_name || '');
+                      onNavigate(a.status === 'em_coleta' ? 'media-collector' : 'results-hud');
+                    }}>
+                      Abrir <ArrowRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
