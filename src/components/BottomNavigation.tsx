@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Camera, Brain, TrendingUp, Zap, Users } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Zap, Users, Video, FileText, ListChecks } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 interface BottomNavigationProps {
@@ -13,15 +13,15 @@ const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) 
   const teacherItems = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
     { id: 'express', label: 'Express', icon: Zap },
+    { id: 'movement-analyser', label: 'Movim.', icon: Video },
     { id: 'clients', label: 'Alunos', icon: Users },
-    { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 
   const studentItems = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
-    { id: 'results-hud', label: 'Resultado', icon: BarChart3 },
-    { id: 'session-tracker', label: 'Sessão', icon: Camera },
+    { id: 'student-report', label: 'Relatório', icon: FileText },
+    { id: 'student-recommendations', label: 'Recom.', icon: ListChecks },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 

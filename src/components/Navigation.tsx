@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import {
-  Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut
+  Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut,
+  Video, MessageSquare, Activity, FileText, ListChecks
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -17,7 +18,10 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
     { id: 'express', label: 'Express', icon: Zap },
     { id: 'clients', label: 'Alunos', icon: Users },
-    { id: 'assessment-wizard', label: 'Avaliações', icon: Scan },
+    { id: 'assessment-wizard', label: 'Avaliação Postura', icon: Scan },
+    { id: 'movement-analyser', label: 'Mov. Analyser', icon: Video },
+    { id: 'complaint-analyser', label: 'Queixa', icon: MessageSquare },
+    { id: 'body-composition', label: 'Composição', icon: Activity },
     { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
     { id: 'plan-builder', label: 'Plano', icon: Brain },
     { id: 'session-tracker', label: 'Sessões', icon: Camera },
@@ -27,8 +31,8 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
 
   const studentMenu = [
     { id: 'dashboard', label: 'Meu Painel', icon: LayoutDashboard },
-    { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
-    { id: 'session-tracker', label: 'Sessões', icon: Camera },
+    { id: 'student-report', label: 'Meu Relatório', icon: FileText },
+    { id: 'student-recommendations', label: 'Recomendações', icon: ListChecks },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
 

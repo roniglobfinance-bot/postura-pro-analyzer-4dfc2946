@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_analysis_feedback: {
+        Row: {
+          analysis_run_id: string | null
+          complaint_analysis_id: string | null
+          correction_text: string | null
+          created_at: string
+          id: string
+          movement_analysis_id: string | null
+          teacher_id: string
+          was_accurate: boolean | null
+        }
+        Insert: {
+          analysis_run_id?: string | null
+          complaint_analysis_id?: string | null
+          correction_text?: string | null
+          created_at?: string
+          id?: string
+          movement_analysis_id?: string | null
+          teacher_id: string
+          was_accurate?: boolean | null
+        }
+        Update: {
+          analysis_run_id?: string | null
+          complaint_analysis_id?: string | null
+          correction_text?: string | null
+          created_at?: string
+          id?: string
+          movement_analysis_id?: string | null
+          teacher_id?: string
+          was_accurate?: boolean | null
+        }
+        Relationships: []
+      }
       assessment_drafts: {
         Row: {
           created_at: string | null
@@ -346,6 +379,51 @@ export type Database = {
           },
         ]
       }
+      ppa_body_composition: {
+        Row: {
+          assessment_id: string | null
+          confidence: number | null
+          created_at: string
+          estimated_body_fat_pct: number | null
+          estimated_lean_mass_kg: number | null
+          front_photo_url: string | null
+          height_cm: number | null
+          id: string
+          notes: string | null
+          side_photo_url: string | null
+          student_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          assessment_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          estimated_body_fat_pct?: number | null
+          estimated_lean_mass_kg?: number | null
+          front_photo_url?: string | null
+          height_cm?: number | null
+          id?: string
+          notes?: string | null
+          side_photo_url?: string | null
+          student_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          assessment_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          estimated_body_fat_pct?: number | null
+          estimated_lean_mass_kg?: number | null
+          front_photo_url?: string | null
+          height_cm?: number | null
+          id?: string
+          notes?: string | null
+          side_photo_url?: string | null
+          student_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
       ppa_clusters: {
         Row: {
           analysis_run_id: string
@@ -377,6 +455,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ppa_complaint_analyses: {
+        Row: {
+          ai_interpretation: string | null
+          assessment_id: string | null
+          created_at: string
+          extracted_region: string | null
+          id: string
+          pattern_match: string | null
+          pattern_type: string | null
+          raw_text: string
+          red_flags: Json | null
+          student_id: string
+        }
+        Insert: {
+          ai_interpretation?: string | null
+          assessment_id?: string | null
+          created_at?: string
+          extracted_region?: string | null
+          id?: string
+          pattern_match?: string | null
+          pattern_type?: string | null
+          raw_text: string
+          red_flags?: Json | null
+          student_id: string
+        }
+        Update: {
+          ai_interpretation?: string | null
+          assessment_id?: string | null
+          created_at?: string
+          extracted_region?: string | null
+          id?: string
+          pattern_match?: string | null
+          pattern_type?: string | null
+          raw_text?: string
+          red_flags?: Json | null
+          student_id?: string
+        }
+        Relationships: []
       }
       ppa_engine_decisions: {
         Row: {
@@ -586,6 +703,42 @@ export type Database = {
           },
         ]
       }
+      ppa_movement_analyses: {
+        Row: {
+          ai_summary: string | null
+          assessment_id: string
+          created_at: string
+          detected_faults: Json | null
+          exercise_type: string
+          id: string
+          keypoint_trajectory: Json | null
+          rom_data: Json | null
+          video_url: string | null
+        }
+        Insert: {
+          ai_summary?: string | null
+          assessment_id: string
+          created_at?: string
+          detected_faults?: Json | null
+          exercise_type: string
+          id?: string
+          keypoint_trajectory?: Json | null
+          rom_data?: Json | null
+          video_url?: string | null
+        }
+        Update: {
+          ai_summary?: string | null
+          assessment_id?: string
+          created_at?: string
+          detected_faults?: Json | null
+          exercise_type?: string
+          id?: string
+          keypoint_trajectory?: Json | null
+          rom_data?: Json | null
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       ppa_plan_links: {
         Row: {
           active: boolean
@@ -593,6 +746,9 @@ export type Database = {
           created_at: string
           id: string
           periodizer_plan_id: string | null
+          published_at: string | null
+          recommendations: Json | null
+          report_html: string | null
           smart_treino_plan_id: string | null
           student_id: string
         }
@@ -602,6 +758,9 @@ export type Database = {
           created_at?: string
           id?: string
           periodizer_plan_id?: string | null
+          published_at?: string | null
+          recommendations?: Json | null
+          report_html?: string | null
           smart_treino_plan_id?: string | null
           student_id: string
         }
@@ -611,6 +770,9 @@ export type Database = {
           created_at?: string
           id?: string
           periodizer_plan_id?: string | null
+          published_at?: string | null
+          recommendations?: Json | null
+          report_html?: string | null
           smart_treino_plan_id?: string | null
           student_id?: string
         }

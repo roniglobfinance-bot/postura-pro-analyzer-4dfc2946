@@ -13,10 +13,15 @@ import ProgressDashboard from '@/components/pages/ProgressDashboard';
 import TeacherDashboard from '@/components/dashboards/TeacherDashboard';
 import StudentDashboard from '@/components/dashboards/StudentDashboard';
 import ExpressAnalysis from '@/components/pages/ExpressAnalysis';
+import MovementAnalyser from '@/components/pages/MovementAnalyser';
+import ComplaintAnalyser from '@/components/analyser/ComplaintAnalyser';
+import BodyCompositionEstimator from '@/components/analyser/BodyCompositionEstimator';
+import StudentReportView from '@/components/student/StudentReportView';
+import StudentRecommendations from '@/components/student/StudentRecommendations';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
-  const { userRole } = useAuth();
+  const { userRole, user } = useAuth();
   const isTeacher = userRole === 'teacher';
   const [currentView, setCurrentView] = useState('dashboard');
 
@@ -32,6 +37,12 @@ const Index = () => {
         return <ClientManagement onNavigate={setCurrentView} />;
       case 'assessment-wizard':
         return <AssessmentWizard onNavigate={setCurrentView} />;
+      case 'movement-analyser':
+        return <MovementAnalyser studentId={user?.id} />;
+      case 'complaint-analyser':
+        return <ComplaintAnalyser studentId={user?.id} />;
+      case 'body-composition':
+        return <BodyCompositionEstimator studentId={user?.id} />;
       case 'media-collector':
         return <MediaCollector onNavigate={setCurrentView} />;
       case 'results-hud':
@@ -44,6 +55,10 @@ const Index = () => {
         return <ProtocolLibrary />;
       case 'progress-dashboard':
         return <ProgressDashboard />;
+      case 'student-report':
+        return <StudentReportView />;
+      case 'student-recommendations':
+        return <StudentRecommendations />;
       default:
         return isTeacher
           ? <TeacherDashboard onNavigate={setCurrentView} />
