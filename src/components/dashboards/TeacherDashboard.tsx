@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Users, Activity, Zap, ArrowRight, Plus, BarChart3, BookOpen, TrendingUp, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import PublishToStudent from '@/components/teacher/PublishToStudent';
 
 interface Props { onNavigate: (view: string) => void; }
 
