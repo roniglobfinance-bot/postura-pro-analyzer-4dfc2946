@@ -1,32 +1,25 @@
-
 ## Problema
 
-A tela fica presa em "Inicializando sistema..." / spinner do AuthGate. O `useAuth` aguarda (`await`) o fetch do profile do Supabase antes de marcar `initialized = true`. Se a query `.single()` em `profiles` demora, falha silenciosa ou é re-disparada pelo `onAuthStateChange`, o flag `initialized` nunca vira `true` e o app trava no `<Loader2 />` do `AuthGate`.
+O botão "Sair" existe apenas dentro do `Navigation.tsx` (sidebar lateral), que está oculto em telas mobile (`hidden md:block` em `Index.tsx`). No mobile, o `BottomNavigation` não tem ação de logout. Resultado: usuário logado como aluno não consegue sair para fazer login com outra conta — fica preso no modo aluno.
 
-Sintomas confirmados:
-- Console mostra `Inicializando sistema de autenticação...` e `SIGNED_IN ...` mas NUNCA mostra `Autenticação inicializada:` (o log que vem depois do `await updateUserState`).
-- Logs aparecem 2x → indica duplo mount/strict mode amplificando o problema.
+## Solução
 
-## Correção (somente `src/hooks/useAuth.tsx`)
+Adicionar um botão "Sair" no `Header.tsx`, visível em todas as resoluções, ao lado do ícone de notificação. O Header já é renderizado em desktop e mobile.
 
-1. **Desacoplar gate de auth do fetch de profile**: marcar `initialized = true` e `loading = false` IMEDIATAMENTE após obter a sessão, sem esperar pelo profile.
-2. **Fetch de profile em background (fire-and-forget)**: `updateUserState` seta `user/session` sincronamente; o role é carregado depois, sem bloquear render.
-3. **No callback `onAuthStateChange`**: NUNCA usar `await` dentro do callback (Supabase docs — causa deadlock). Disparar fetch de profile com `.then()` em vez de `await`.
-4. **Timeout defensivo de 5s** no fetch de profile — se não retornar, assume role `'student'` por padrão e segue.
-5. **Anti-duplicate guard**: usar `useRef` para garantir que `initializeAuth` só roda uma vez, mesmo sob StrictMode duplo-mount.
+## Mudanças
+
+**`src/components/Header.tsx`** (único arquivo alterado):
+- Importar `useAuth` e ícone `LogOut` do lucide-react.
+- Exibir o email do usuário (truncado, escondido em telas muito pequenas) ao lado do sino.
+- Adicionar botão "Sair" (variant `ghost`, ícone `LogOut` + label "Sair") que chama `signOut()` do `useAuth`.
+- Só renderiza o bloco de logout quando há `user` autenticado.
+
+## Não muda
+
+- `useAuth.tsx` (signOut já funciona corretamente).
+- `Navigation.tsx` mantém seu botão Sair na sidebar desktop (redundância proposital).
+- Nenhuma rota, migration ou lógica de negócio.
 
 ## Resultado esperado
 
-- Tela de loading dura no máximo ~500ms (tempo de `getSession`).
-- Usuário cai imediatamente no dashboard correto após login.
-- Role carrega em background; UI que depende dele re-renderiza quando chegar.
-- Sem mudanças de UI, sem migration, sem mudança em outros arquivos.
-
-## Detalhes técnicos
-
-Arquivo único alterado: `src/hooks/useAuth.tsx`
-- Remover `await` antes de `fetchUserProfile` no `initializeAuth` e no listener.
-- Mover `setLoading(false); setInitialized(true)` para logo após `setSession/setUser`.
-- Envolver fetch de profile com `Promise.race([fetch, timeout(5000)])`.
-
-Nenhum outro arquivo precisa mudar — `AuthGate`, `AuthPage` e dashboards já reagem corretamente a `isAuthenticated` e `userRole`.
+Em qualquer dispositivo, o usuário vê "Sair" no canto superior direito, clica, é deslogado e volta para `/auth` para entrar com outra conta (professor, por exemplo).
