@@ -30,30 +30,53 @@ export const useAuth = () => {
   return context;
 };
 
-// Fire-and-forget profile fetch with 5s timeout, never blocks auth gate
-const loadProfileRole = (userId: string, setUserRole: (r: string | null) => void) => {
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-  const query = supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle()
-    .then(({ data, error }) => {
-      if (error) {
-        console.warn('⚠️ Profile fetch error (using fallback):', error.message);
-        return null;
-      }
-      return data;
-    });
+// Resolve role from multiple sources without ever locking a teacher into student mode.
+// Priority: user metadata (instant) -> profiles.role -> RPC get_user_role -> keep metadata or 'student'
+const loadProfileRole = async (
+  user: User,
+  setUserRole: (r: string | null) => void
+) => {
+  const metaRole =
+    (user.user_metadata as any)?.role ||
+    (user.app_metadata as any)?.role ||
+    null;
+  if (metaRole) setUserRole(metaRole);
 
-  Promise.race([query, timeout])
-    .then((profile: any) => {
-      setUserRole(profile?.role || 'student');
-    })
-    .catch((err) => {
-      console.warn('⚠️ Profile fetch failed, defaulting to student:', err);
-      setUserRole('student');
-    });
+  const withTimeout = <T,>(p: Promise<T>, ms = 4000) =>
+    Promise.race<T | null>([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+
+  try {
+    const profileRole = await withTimeout(
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => ((data as any)?.role as string) || null)
+    );
+    if (profileRole) {
+      setUserRole(profileRole);
+      return;
+    }
+  } catch (err) {
+    console.warn('⚠️ Profile fetch failed:', err);
+  }
+
+  try {
+    const rpcRole = await withTimeout(
+      supabase
+        .rpc('get_user_role', { user_id: user.id })
+        .then(({ data }) => ((data as any) as string) || null)
+    );
+    if (rpcRole) {
+      setUserRole(rpcRole);
+      return;
+    }
+  } catch (err) {
+    console.warn('⚠️ RPC get_user_role failed:', err);
+  }
+
+  if (!metaRole) setUserRole('student');
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
