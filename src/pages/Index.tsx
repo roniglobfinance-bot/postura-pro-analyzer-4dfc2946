@@ -18,6 +18,7 @@ import ComplaintAnalyser from '@/components/analyser/ComplaintAnalyser';
 import BodyCompositionEstimator from '@/components/analyser/BodyCompositionEstimator';
 import StudentReportView from '@/components/student/StudentReportView';
 import StudentRecommendations from '@/components/student/StudentRecommendations';
+import FitProApiSettings from '@/components/pages/FitProApiSettings';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
