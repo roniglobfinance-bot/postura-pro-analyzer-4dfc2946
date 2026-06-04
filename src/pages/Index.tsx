@@ -22,7 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
   const { userRole, user } = useAuth();
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'admin';
   const [currentView, setCurrentView] = useState('dashboard');
 
   const renderCurrentView = () => {
