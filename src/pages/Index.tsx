@@ -60,6 +60,8 @@ const Index = () => {
         return <StudentReportView />;
       case 'student-recommendations':
         return <StudentRecommendations />;
+      case 'fitpro-api':
+        return <FitProApiSettings />;
       default:
         return isTeacher
           ? <TeacherDashboard onNavigate={setCurrentView} />
