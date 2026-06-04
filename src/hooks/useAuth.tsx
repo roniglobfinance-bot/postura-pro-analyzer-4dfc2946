@@ -42,8 +42,8 @@ const loadProfileRole = async (
     null;
   if (metaRole) setUserRole(metaRole);
 
-  const withTimeout = <T,>(p: Promise<T>, ms = 4000) =>
-    Promise.race<T | null>([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+  const withTimeout = <T,>(p: PromiseLike<T>, ms = 4000): Promise<T | null> =>
+    Promise.race<T | null>([Promise.resolve(p), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
 
   try {
     const profileRole = await withTimeout(
