@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         if (currentSession?.user) {
-          loadProfileRole(currentSession.user.id, setUserRole);
+          loadProfileRole(currentSession.user, setUserRole);
         }
       } catch (err) {
         console.error('Erro na inicialização da auth:', err);
