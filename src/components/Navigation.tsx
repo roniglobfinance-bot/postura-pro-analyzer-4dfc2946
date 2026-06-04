@@ -12,7 +12,7 @@ interface NavigationProps {
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const { userRole, signOut, user } = useAuth();
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'admin';
 
   const teacherMenu = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
