@@ -8,7 +8,7 @@ interface BottomNavigationProps {
 
 const BottomNavigation = ({ currentView, onViewChange }: BottomNavigationProps) => {
   const { userRole } = useAuth();
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'admin';
 
   const teacherItems = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
