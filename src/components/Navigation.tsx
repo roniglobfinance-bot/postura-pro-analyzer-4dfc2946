@@ -12,7 +12,7 @@ interface NavigationProps {
 
 const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const { userRole, signOut, user } = useAuth();
-  const isTeacher = userRole === 'teacher';
+  const isTeacher = userRole === 'teacher' || userRole === 'admin';
 
   const teacherMenu = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
@@ -27,6 +27,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'session-tracker', label: 'Sessões', icon: Camera },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
     { id: 'protocol-library', label: 'Biblioteca', icon: BookOpen },
+    { id: 'fitpro-api', label: 'API FitPro', icon: FileText },
   ];
 
   const studentMenu = [
