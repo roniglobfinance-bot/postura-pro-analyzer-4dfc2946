@@ -100,7 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(newSession);
       setUser(newSession?.user || null);
       if (newSession?.user) {
-        loadProfileRole(newSession.user.id, setUserRole);
+        loadProfileRole(newSession.user, setUserRole);
       } else {
         setUserRole(null);
       }
