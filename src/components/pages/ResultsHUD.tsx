@@ -255,31 +255,20 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
 
   const keypoints = realKeypoints.length > 0 ? realKeypoints : demoKeypoints;
 
-  const defaultFindings = [
-    { finding_key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
-    { finding_key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
-    { finding_key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
-    { finding_key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
-  ];
-
-  const defaultTensionZones = [
-    { id: 'z1', name: 'Cervical Posterior', x: 50, y: 15, intensity: 78, myofascialLine: 'SBL' },
-    { id: 'z2', name: 'Lombar', x: 50, y: 55, intensity: 85, myofascialLine: 'SBL' },
-    { id: 'z3', name: 'Joelho Medial E', x: 40, y: 78, intensity: 70, myofascialLine: 'DFL' },
-  ];
+  const hasRealData = !!aiReport || realFindings.length > 0;
 
   const findingsForDisplay = aiReport
     ? aiReport.findings_analysis.map(f => ({ key: f.key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: f.clinical_note }))
     : realFindings.length > 0
     ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction || 'anterior', severity: f.severity, confidence: f.confidence || 0, clinical_note: '' }))
-    : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: '' }));
+    : [];
 
-  const risks = aiReport ? aiReport.risk_assessment : { lumbar_risk: 72, cervical_risk: 58, base_risk: 45, overall_score: 62 };
+  const risks = aiReport ? aiReport.risk_assessment : { lumbar_risk: 0, cervical_risk: 0, base_risk: 0, overall_score: 0 };
   const hudCards = [
-    { key: 'IEP', label: 'Estabilidade Podal', value: aiReport?.hud_metrics.iep ?? 72, icon: Activity, color: 'text-blue-600' },
-    { key: 'EA', label: 'Espaço Articular', value: aiReport?.hud_metrics.ea ?? 58, icon: Zap, color: 'text-purple-600' },
-    { key: 'PTS', label: 'Transferência Potência', value: aiReport?.hud_metrics.pts ?? 65, icon: Brain, color: 'text-green-600' },
-    { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 30, icon: Activity, color: 'text-orange-600' },
+    { key: 'IEP', label: 'Estabilidade Podal', value: aiReport?.hud_metrics.iep ?? 0, icon: Activity, color: 'text-blue-600' },
+    { key: 'EA', label: 'Espaço Articular', value: aiReport?.hud_metrics.ea ?? 0, icon: Zap, color: 'text-purple-600' },
+    { key: 'PTS', label: 'Transferência Potência', value: aiReport?.hud_metrics.pts ?? 0, icon: Brain, color: 'text-green-600' },
+    { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 0, icon: Activity, color: 'text-orange-600' },
   ];
   const tensionZones = aiReport
     ? aiReport.tension_zones.map((z, i) => ({ id: `z${i}`, name: z.name, x: z.x, y: z.y, intensity: z.intensity, myofascialLine: z.myofascial_line }))
