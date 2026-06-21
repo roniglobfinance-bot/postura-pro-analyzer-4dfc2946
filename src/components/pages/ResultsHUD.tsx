@@ -403,8 +403,54 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
         </div>
       </div>
 
+      {/* Student / Assessment selector for teachers */}
+      {isTeacher && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <User className="h-4 w-4" /> Selecione um aluno e avaliação
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Aluno</label>
+              <Select value={active.studentId || ''} onValueChange={pickStudent} disabled={loadingStudents}>
+                <SelectTrigger><SelectValue placeholder={loadingStudents ? 'Carregando...' : 'Escolha um aluno'} /></SelectTrigger>
+                <SelectContent>
+                  {students.length === 0 && <SelectItem value="__empty__" disabled>Nenhum aluno vinculado</SelectItem>}
+                  {students.map(s => (
+                    <SelectItem key={s.student_id} value={s.student_id}>{s.full_name || s.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Avaliação</label>
+              <Select value={active.assessmentId || ''} onValueChange={pickAssessment} disabled={!active.studentId || loadingAssessments}>
+                <SelectTrigger><SelectValue placeholder={!active.studentId ? 'Escolha um aluno primeiro' : loadingAssessments ? 'Carregando...' : 'Escolha uma avaliação'} /></SelectTrigger>
+                <SelectContent>
+                  {assessments.length === 0 && <SelectItem value="__empty__" disabled>Nenhuma avaliação encontrada</SelectItem>}
+                  {assessments.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {new Date(a.created_at).toLocaleDateString('pt-BR')} — {a.status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {!active.assessmentId && (
-        <Alert><AlertTriangle className="h-4 w-4" /><AlertDescription>Nenhuma avaliação ativa. Dados demonstrativos.</AlertDescription></Alert>
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {isTeacher
+              ? 'Selecione um aluno e uma avaliação acima para visualizar os resultados.'
+              : 'Nenhuma avaliação disponível ainda. Aguarde seu professor publicar uma análise.'}
+          </AlertDescription>
+        </Alert>
       )}
 
       {aiReport && (
