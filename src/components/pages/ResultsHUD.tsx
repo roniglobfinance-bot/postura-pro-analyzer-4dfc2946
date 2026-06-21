@@ -15,11 +15,17 @@ import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import { useAuth } from '@/hooks/useAuth';
 import { generateDiagnosticReport, DiagnosticInput, FailSafeResult, NeuroMetabolicAlert } from '@/services/diagnosticEngine';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { User } from 'lucide-react';
 
 interface ResultsHUDProps {
   onNavigate?: (view: string) => void;
 }
+
+interface StudentOption { student_id: string; full_name: string | null; email: string | null; }
+interface AssessmentOption { id: string; created_at: string; status: string; }
 
 type ResultStatus = 'idle' | 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
 
