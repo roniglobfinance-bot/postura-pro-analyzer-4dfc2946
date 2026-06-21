@@ -279,17 +279,19 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const getModeColor = (mode: string) => mode === 'LOAD' ? 'bg-green-100 text-green-800' : mode === 'SHIELD' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
 
   const handleAnalyze = async () => {
+    if (!active.assessmentId) {
+      toast.error('Selecione uma avaliação antes de analisar.');
+      return;
+    }
+    if (realFindings.length === 0) {
+      toast.error('Esta avaliação ainda não tem achados coletados. Faça a coleta primeiro.');
+      return;
+    }
     setIsAnalyzing(true);
     setStatus('processando');
-    const findingsPayload = realFindings.length > 0
-      ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }))
-      : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }));
-    const metricsPayload = realMetrics.length > 0
-      ? realMetrics.map(m => ({ key: m.key, value: m.value, unit: m.unit, severity: m.severity }))
-      : [{ key: 'cranio_cervical_angle', value: 48, unit: 'degrees', severity: 2 }, { key: 'pelvic_tilt', value: 18, unit: 'degrees', severity: 1 }];
-    const clustersPayload = realClusters.length > 0
-      ? realClusters.map(c => ({ cluster_types: c.cluster_types, score: c.score }))
-      : [{ cluster_types: ['compressive_upper', 'instability_lower'], score: 68 }];
+    const findingsPayload = realFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }));
+    const metricsPayload = realMetrics.map(m => ({ key: m.key, value: m.value, unit: m.unit, severity: m.severity }));
+    const clustersPayload = realClusters.map(c => ({ cluster_types: c.cluster_types, score: c.score }));
 
     try {
       const { data, error } = await supabase.functions.invoke('analyze-report', {
