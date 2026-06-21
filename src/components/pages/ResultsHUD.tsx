@@ -272,7 +272,7 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   ];
   const tensionZones = aiReport
     ? aiReport.tension_zones.map((z, i) => ({ id: `z${i}`, name: z.name, x: z.x, y: z.y, intensity: z.intensity, myofascialLine: z.myofascial_line }))
-    : defaultTensionZones;
+    : [];
   const triggeredGuardrails = aiReport?.guardrails.filter(g => g.triggered) || [];
 
   const getSeverityColor = (s: number) => s >= 3 ? 'bg-red-100 text-red-800 border-red-300' : s === 2 ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 'bg-green-100 text-green-800 border-green-300';
