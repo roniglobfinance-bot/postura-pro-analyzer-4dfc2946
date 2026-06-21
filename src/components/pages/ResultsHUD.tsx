@@ -15,11 +15,17 @@ import AnalyticCanvas from '@/components/dashboard/AnalyticCanvas';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import { useAuth } from '@/hooks/useAuth';
 import { generateDiagnosticReport, DiagnosticInput, FailSafeResult, NeuroMetabolicAlert } from '@/services/diagnosticEngine';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { User } from 'lucide-react';
 
 interface ResultsHUDProps {
   onNavigate?: (view: string) => void;
 }
+
+interface StudentOption { student_id: string; full_name: string | null; email: string | null; }
+interface AssessmentOption { id: string; created_at: string; status: string; }
 
 type ResultStatus = 'idle' | 'processando' | 'pronto' | 'baixa_confianca' | 'conflitante' | 'precisa_midia';
 
@@ -46,7 +52,8 @@ interface SupabaseMetric { key: string; value: number; unit: string | null; seve
 interface SupabaseCluster { cluster_types: any; score: number; }
 
 const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
-  const { active, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
+  const { active, setAssessment, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
+  const { user, userRole } = useAuth();
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [activeTab, setActiveTab] = useState('overview');
   const [aiReport, setAiReport] = useState<AIReport | null>(null);
@@ -60,6 +67,80 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const [gpsMapping, setGpsMapping] = useState<Record<string, any> | null>(null);
   const [failSafes, setFailSafes] = useState<FailSafeResult | null>(null);
   const [nmAlerts, setNmAlerts] = useState<NeuroMetabolicAlert[]>([]);
+
+  // Student/assessment selectors
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentOption[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [loadingAssessments, setLoadingAssessments] = useState(false);
+  const isTeacher = userRole === 'teacher';
+
+  // Load students for teacher
+  useEffect(() => {
+    if (!user || !isTeacher) return;
+    setLoadingStudents(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_teacher_students', { teacher_id: user.id });
+        if (error) throw error;
+        setStudents((data as any[]) || []);
+      } catch (e) {
+        console.error('load students', e);
+      } finally { setLoadingStudents(false); }
+    })();
+  }, [user, isTeacher]);
+
+  // Load assessments when a student is picked
+  useEffect(() => {
+    if (!active.studentId) { setAssessments([]); return; }
+    setLoadingAssessments(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ppa_assessments' as any)
+          .select('id, created_at, status')
+          .eq('student_id', active.studentId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (error) throw error;
+        const list = (data as any[]) || [];
+        setAssessments(list);
+        // Auto-pick latest if none selected
+        if (!active.assessmentId && list.length > 0) {
+          await pickAssessment(list[0].id);
+        }
+      } catch (e) {
+        console.error('load assessments', e);
+      } finally { setLoadingAssessments(false); }
+    })();
+  }, [active.studentId]);
+
+  const pickStudent = (studentId: string) => {
+    const s = students.find(x => x.student_id === studentId);
+    if (!s) return;
+    setAssessment('', studentId, s.full_name || s.email || 'Aluno');
+    setAiReport(null);
+    setRealFindings([]);
+    setRealMetrics([]);
+    setRealClusters([]);
+    setStatus('idle');
+  };
+
+  const pickAssessment = async (assessmentId: string) => {
+    if (!active.studentId) return;
+    setAssessment(assessmentId, active.studentId, active.studentName || 'Aluno');
+    // Find latest analysis run for this assessment
+    try {
+      const { data: runs } = await supabase
+        .from('ppa_analysis_runs' as any)
+        .select('id, status')
+        .eq('assessment_id', assessmentId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const runId = (runs as any[])?.[0]?.id;
+      if (runId) setAnalysisRunId(runId);
+    } catch (e) { console.error('pick assessment', e); }
+  };
 
   useEffect(() => {
     if (!active.assessmentId) return;
@@ -174,52 +255,43 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
 
   const keypoints = realKeypoints.length > 0 ? realKeypoints : demoKeypoints;
 
-  const defaultFindings = [
-    { finding_key: 'anteriorização_cervical', direction: 'anterior', severity: 2, confidence: 0.85 },
-    { finding_key: 'rotacao_pelvica', direction: 'lateral', severity: 1, confidence: 0.72 },
-    { finding_key: 'valgo_joelho_e', direction: 'medial', severity: 2, confidence: 0.91 },
-    { finding_key: 'hiperlordose_lombar', direction: 'anterior', severity: 3, confidence: 0.88 },
-  ];
-
-  const defaultTensionZones = [
-    { id: 'z1', name: 'Cervical Posterior', x: 50, y: 15, intensity: 78, myofascialLine: 'SBL' },
-    { id: 'z2', name: 'Lombar', x: 50, y: 55, intensity: 85, myofascialLine: 'SBL' },
-    { id: 'z3', name: 'Joelho Medial E', x: 40, y: 78, intensity: 70, myofascialLine: 'DFL' },
-  ];
+  const hasRealData = !!aiReport || realFindings.length > 0;
 
   const findingsForDisplay = aiReport
     ? aiReport.findings_analysis.map(f => ({ key: f.key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: f.clinical_note }))
     : realFindings.length > 0
     ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction || 'anterior', severity: f.severity, confidence: f.confidence || 0, clinical_note: '' }))
-    : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence, clinical_note: '' }));
+    : [];
 
-  const risks = aiReport ? aiReport.risk_assessment : { lumbar_risk: 72, cervical_risk: 58, base_risk: 45, overall_score: 62 };
+  const risks = aiReport ? aiReport.risk_assessment : { lumbar_risk: 0, cervical_risk: 0, base_risk: 0, overall_score: 0 };
   const hudCards = [
-    { key: 'IEP', label: 'Estabilidade Podal', value: aiReport?.hud_metrics.iep ?? 72, icon: Activity, color: 'text-blue-600' },
-    { key: 'EA', label: 'Espaço Articular', value: aiReport?.hud_metrics.ea ?? 58, icon: Zap, color: 'text-purple-600' },
-    { key: 'PTS', label: 'Transferência Potência', value: aiReport?.hud_metrics.pts ?? 65, icon: Brain, color: 'text-green-600' },
-    { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 30, icon: Activity, color: 'text-orange-600' },
+    { key: 'IEP', label: 'Estabilidade Podal', value: aiReport?.hud_metrics.iep ?? 0, icon: Activity, color: 'text-blue-600' },
+    { key: 'EA', label: 'Espaço Articular', value: aiReport?.hud_metrics.ea ?? 0, icon: Zap, color: 'text-purple-600' },
+    { key: 'PTS', label: 'Transferência Potência', value: aiReport?.hud_metrics.pts ?? 0, icon: Brain, color: 'text-green-600' },
+    { key: 'TNS', label: 'Tremor Neuromuscular', value: aiReport?.hud_metrics.tns ?? 0, icon: Activity, color: 'text-orange-600' },
   ];
   const tensionZones = aiReport
     ? aiReport.tension_zones.map((z, i) => ({ id: `z${i}`, name: z.name, x: z.x, y: z.y, intensity: z.intensity, myofascialLine: z.myofascial_line }))
-    : defaultTensionZones;
+    : [];
   const triggeredGuardrails = aiReport?.guardrails.filter(g => g.triggered) || [];
 
   const getSeverityColor = (s: number) => s >= 3 ? 'bg-red-100 text-red-800 border-red-300' : s === 2 ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 'bg-green-100 text-green-800 border-green-300';
   const getModeColor = (mode: string) => mode === 'LOAD' ? 'bg-green-100 text-green-800' : mode === 'SHIELD' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
 
   const handleAnalyze = async () => {
+    if (!active.assessmentId) {
+      toast.error('Selecione uma avaliação antes de analisar.');
+      return;
+    }
+    if (realFindings.length === 0) {
+      toast.error('Esta avaliação ainda não tem achados coletados. Faça a coleta primeiro.');
+      return;
+    }
     setIsAnalyzing(true);
     setStatus('processando');
-    const findingsPayload = realFindings.length > 0
-      ? realFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }))
-      : defaultFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }));
-    const metricsPayload = realMetrics.length > 0
-      ? realMetrics.map(m => ({ key: m.key, value: m.value, unit: m.unit, severity: m.severity }))
-      : [{ key: 'cranio_cervical_angle', value: 48, unit: 'degrees', severity: 2 }, { key: 'pelvic_tilt', value: 18, unit: 'degrees', severity: 1 }];
-    const clustersPayload = realClusters.length > 0
-      ? realClusters.map(c => ({ cluster_types: c.cluster_types, score: c.score }))
-      : [{ cluster_types: ['compressive_upper', 'instability_lower'], score: 68 }];
+    const findingsPayload = realFindings.map(f => ({ key: f.finding_key, direction: f.direction, severity: f.severity, confidence: f.confidence }));
+    const metricsPayload = realMetrics.map(m => ({ key: m.key, value: m.value, unit: m.unit, severity: m.severity }));
+    const clustersPayload = realClusters.map(c => ({ cluster_types: c.cluster_types, score: c.score }));
 
     try {
       const { data, error } = await supabase.functions.invoke('analyze-report', {
@@ -322,8 +394,54 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
         </div>
       </div>
 
+      {/* Student / Assessment selector for teachers */}
+      {isTeacher && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <User className="h-4 w-4" /> Selecione um aluno e avaliação
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Aluno</label>
+              <Select value={active.studentId || ''} onValueChange={pickStudent} disabled={loadingStudents}>
+                <SelectTrigger><SelectValue placeholder={loadingStudents ? 'Carregando...' : 'Escolha um aluno'} /></SelectTrigger>
+                <SelectContent>
+                  {students.length === 0 && <SelectItem value="__empty__" disabled>Nenhum aluno vinculado</SelectItem>}
+                  {students.map(s => (
+                    <SelectItem key={s.student_id} value={s.student_id}>{s.full_name || s.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Avaliação</label>
+              <Select value={active.assessmentId || ''} onValueChange={pickAssessment} disabled={!active.studentId || loadingAssessments}>
+                <SelectTrigger><SelectValue placeholder={!active.studentId ? 'Escolha um aluno primeiro' : loadingAssessments ? 'Carregando...' : 'Escolha uma avaliação'} /></SelectTrigger>
+                <SelectContent>
+                  {assessments.length === 0 && <SelectItem value="__empty__" disabled>Nenhuma avaliação encontrada</SelectItem>}
+                  {assessments.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {new Date(a.created_at).toLocaleDateString('pt-BR')} — {a.status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {!active.assessmentId && (
-        <Alert><AlertTriangle className="h-4 w-4" /><AlertDescription>Nenhuma avaliação ativa. Dados demonstrativos.</AlertDescription></Alert>
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {isTeacher
+              ? 'Selecione um aluno e uma avaliação acima para visualizar os resultados.'
+              : 'Nenhuma avaliação disponível ainda. Aguarde seu professor publicar uma análise.'}
+          </AlertDescription>
+        </Alert>
       )}
 
       {aiReport && (
