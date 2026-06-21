@@ -53,7 +53,7 @@ interface SupabaseCluster { cluster_types: any; score: number; }
 
 const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const { active, setAssessment, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
-  const { user, profile } = useAuth();
+  const { user, userRole } = useAuth();
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [activeTab, setActiveTab] = useState('overview');
   const [aiReport, setAiReport] = useState<AIReport | null>(null);
