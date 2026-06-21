@@ -52,7 +52,8 @@ interface SupabaseMetric { key: string; value: number; unit: string | null; seve
 interface SupabaseCluster { cluster_types: any; score: number; }
 
 const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
-  const { active, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
+  const { active, setAssessment, setAnalysisRunId, setStatus: setFlowStatus } = useActiveAssessment();
+  const { user, profile } = useAuth();
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [activeTab, setActiveTab] = useState('overview');
   const [aiReport, setAiReport] = useState<AIReport | null>(null);
@@ -66,6 +67,80 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const [gpsMapping, setGpsMapping] = useState<Record<string, any> | null>(null);
   const [failSafes, setFailSafes] = useState<FailSafeResult | null>(null);
   const [nmAlerts, setNmAlerts] = useState<NeuroMetabolicAlert[]>([]);
+
+  // Student/assessment selectors
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentOption[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [loadingAssessments, setLoadingAssessments] = useState(false);
+  const isTeacher = profile?.role === 'teacher';
+
+  // Load students for teacher
+  useEffect(() => {
+    if (!user || !isTeacher) return;
+    setLoadingStudents(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_teacher_students', { teacher_id: user.id });
+        if (error) throw error;
+        setStudents((data as any[]) || []);
+      } catch (e) {
+        console.error('load students', e);
+      } finally { setLoadingStudents(false); }
+    })();
+  }, [user, isTeacher]);
+
+  // Load assessments when a student is picked
+  useEffect(() => {
+    if (!active.studentId) { setAssessments([]); return; }
+    setLoadingAssessments(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ppa_assessments' as any)
+          .select('id, created_at, status')
+          .eq('student_id', active.studentId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (error) throw error;
+        const list = (data as any[]) || [];
+        setAssessments(list);
+        // Auto-pick latest if none selected
+        if (!active.assessmentId && list.length > 0) {
+          await pickAssessment(list[0].id);
+        }
+      } catch (e) {
+        console.error('load assessments', e);
+      } finally { setLoadingAssessments(false); }
+    })();
+  }, [active.studentId]);
+
+  const pickStudent = (studentId: string) => {
+    const s = students.find(x => x.student_id === studentId);
+    if (!s) return;
+    setAssessment('', studentId, s.full_name || s.email || 'Aluno');
+    setAiReport(null);
+    setRealFindings([]);
+    setRealMetrics([]);
+    setRealClusters([]);
+    setStatus('idle');
+  };
+
+  const pickAssessment = async (assessmentId: string) => {
+    if (!active.studentId) return;
+    setAssessment(assessmentId, active.studentId, active.studentName || 'Aluno');
+    // Find latest analysis run for this assessment
+    try {
+      const { data: runs } = await supabase
+        .from('ppa_analysis_runs' as any)
+        .select('id, status')
+        .eq('assessment_id', assessmentId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const runId = (runs as any[])?.[0]?.id;
+      if (runId) setAnalysisRunId(runId);
+    } catch (e) { console.error('pick assessment', e); }
+  };
 
   useEffect(() => {
     if (!active.assessmentId) return;
