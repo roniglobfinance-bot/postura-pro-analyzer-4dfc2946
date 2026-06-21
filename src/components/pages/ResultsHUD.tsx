@@ -73,7 +73,7 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const [assessments, setAssessments] = useState<AssessmentOption[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [loadingAssessments, setLoadingAssessments] = useState(false);
-  const isTeacher = profile?.role === 'teacher';
+  const isTeacher = userRole === 'teacher';
 
   // Load students for teacher
   useEffect(() => {
