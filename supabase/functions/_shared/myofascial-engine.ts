@@ -41,6 +41,10 @@ export const evaluationFlags: Record<string, Record<string, FlagDef>> = {
     PEP13: { name: 'Elevação de Ombro', severity: 1, implies: ['LBA', 'LE'] },
     PEP14: { name: 'Projeção Anterior Cabeça', severity: 3, implies: ['LSP', 'LF', 'LBA'] },
     PEP15: { name: 'Escoliose Estrutural', severity: 4, implies: ['LL', 'LE', 'LSP'] },
+    PEP16: { name: 'Valgo de Cotovelo', severity: 2, implies: ['LBA'] },
+    PEP17: { name: 'Drop do Navicular', severity: 2, implies: ['LPA'] },
+    PEP18: { name: 'Umbigo Triste/Desviado', severity: 2, implies: ['LPA', 'LE'] },
+    PEP19: { name: 'Triângulo de Tales Assimétrico', severity: 3, implies: ['LL', 'LE', 'LSP'] },
   },
   dynamic: {
     DYN01: { name: 'Valgo Dinâmico', severity: 3, implies: ['LL', 'LE', 'LPA'] },
@@ -55,6 +59,9 @@ export const evaluationFlags: Record<string, Record<string, FlagDef>> = {
     TES03: { name: 'Ober Positivo', severity: 2, implies: ['LL'] },
     TES04: { name: 'Flexão Anterior Limitada', severity: 2, implies: ['LSP'] },
     TES05: { name: 'Rotação Cervical Limitada', severity: 2, implies: ['LBA', 'LE'] },
+    TES06: { name: 'Teste do Calço Positivo', severity: 3, implies: ['LSP', 'LL'] },
+    TES07: { name: 'Short Foot Test Positivo', severity: 2, implies: ['LPA', 'LL'] },
+    TES08: { name: 'Ritmo Escapular Alterado', severity: 2, implies: ['LBA'] },
   },
   pain: {
     DOR01: { name: 'Dor Lombar Grau 1', severity: 1, location: 'lombar' },
@@ -76,6 +83,7 @@ export const evaluationFlags: Record<string, Record<string, FlagDef>> = {
     CTX02: { name: 'Idade > 70', severity: 3, implies: [] },
     CTX03: { name: 'Retrolistese', severity: 4, implies: ['LSP', 'LPA'], redFlag: true },
     CTX04: { name: 'Osteopenia', severity: 3, implies: ['LSP'], redFlag: true },
+    CTX05: { name: 'Pé Rodado 10h10', severity: 2, implies: ['LE', 'LL'] },
   },
   lesion: {
     LES01: { name: 'Ruptura LCA', severity: 4, implies: ['LL', 'LE'], redFlag: true },
@@ -306,7 +314,48 @@ export const diagnosticRules: DiagnosticRule[] = [
       protocolRef: 'PROTOCOLO_ANTEVERSAO',
     },
   },
+  {
+    id: 'DIAG_COLAPSO_LATERAL',
+    name: 'Síndrome de Colapso Lateral (Escoliose Funcional por Perna Curta)',
+    condition: { required: ['PEP19', 'PEP08'], optional: ['PEP18', 'CTX05'] },
+    logicRule: 'IF (Triângulo de Tales Assimétrico AND Retroversão/Drop Pélvico) THEN Colapso Lateral',
+    output: {
+      diagnosis: 'Síndrome de Colapso Lateral',
+      severity: 3,
+      affectedLines: ['LL', 'LE', 'LSP'],
+      mechanisms: [
+        'Perna funcionalmente ou anatomicamente mais curta gera queda pélvica de um lado',
+        'Tronco cai para o lado curto, coluna faz curva compensatória para o lado oposto',
+        'Espasmo lombar unilateral crônico tentando conter a queda do tronco',
+        'Confirmar com Teste do Calço: se simetriza com calço de 1-1.5cm, é discrepância funcional (indicar palmilha); se resistir ao calço, é rigidez estrutural',
+      ],
+      prognosis: 'Bom se funcional (responde a palmilha + descompressão); reservado se estrutural',
+      protocolRef: 'PROTOCOLO_COLAPSO_LATERAL',
+    },
+  },
 ];
+
+// ============================================
+// ARQUÉTIPOS BIOMECÂNICOS — macro-classificação antes das flags
+// ============================================
+export const biomechanicalArchetypes = {
+  SWAYBACK: { name: 'Swayback', criteria: 'Quadril à frente do tornozelo + Glúteo inibido', cause: 'Ligamentos frouxos / frouxidão ligamentar' },
+  FLAT_BACK: { name: 'Flat Back', criteria: 'Lombar reta + Retroversão pélvica', cause: 'Isquiotibiais curtos' },
+  CIFOSE_LORDOSE: { name: 'Cifose-Lordose', criteria: 'Bumbum empinado + Corcunda (hipercifose)', cause: 'Síndrome Cruzada Superior e Inferior combinadas' },
+  COLAPSO_LATERAL: { name: 'Colapso Lateral', criteria: 'Um ombro mais baixo + Triângulo de Tales assimétrico', cause: 'Escoliose ou perna curta (real ou funcional)' },
+} as const;
+
+export type BiomechanicalArchetypeKey = keyof typeof biomechanicalArchetypes;
+
+/** Classifica o caso em um dos 4 arquétipos macro a partir das flags. */
+export function classifyArchetype(flagIds: string[]): { key: BiomechanicalArchetypeKey; name: string; criteria: string; cause: string } | null {
+  const s = new Set(flagIds || []);
+  if (s.has('PEP19') || (s.has('PEP15') && s.has('PEP13'))) return { key: 'COLAPSO_LATERAL', ...biomechanicalArchetypes.COLAPSO_LATERAL };
+  if (s.has('PEP07') && s.has('PEP11')) return { key: 'CIFOSE_LORDOSE', ...biomechanicalArchetypes.CIFOSE_LORDOSE };
+  if (s.has('PEP08') && s.has('PEP10')) return { key: 'SWAYBACK', ...biomechanicalArchetypes.SWAYBACK };
+  if (s.has('PEP10') || s.has('PEP08')) return { key: 'FLAT_BACK', ...biomechanicalArchetypes.FLAT_BACK };
+  return null;
+}
 
 /** Retorna a definição de uma flag pelo id (ex: 'DYN01'). */
 export function getFlagDef(flagId: string): FlagDef | null {
