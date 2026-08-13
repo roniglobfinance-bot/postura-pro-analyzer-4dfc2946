@@ -75,7 +75,12 @@ export const evaluationFlags = {
     PEP12: { name: 'Protração de Ombros', severity: 2, implies: ['LF', 'LBA'] },
     PEP13: { name: 'Elevação de Ombro', severity: 1, implies: ['LBA', 'LE'] },
     PEP14: { name: 'Projeção Anterior Cabeça', severity: 3, implies: ['LSP', 'LF', 'LBA'] },
-    PEP15: { name: 'Escoliose Estrutural', severity: 4, implies: ['LL', 'LE', 'LSP'] }
+    PEP15: { name: 'Escoliose Estrutural', severity: 4, implies: ['LL', 'LE', 'LSP'] },
+    // Whitepaper 9FIT Postura Pro Analyzer
+    PEP16: { name: 'Valgo de Cotovelo', severity: 2, implies: ['LBA'] }, // ângulo > 15° = instabilidade ligamentar
+    PEP17: { name: 'Drop do Navicular', severity: 2, implies: ['LPA'] }, // colapso do arco = falha da Linha Profunda Anterior
+    PEP18: { name: 'Umbigo Triste/Desviado', severity: 2, implies: ['LPA', 'LE'] }, // hipotonia de reto abdominal ou escoliose
+    PEP19: { name: 'Triângulo de Tales Assimétrico', severity: 3, implies: ['LL', 'LE', 'LSP'] } // prova visual de escoliose/colapso lateral
   },
   
   // Flags Funcionais Dinâmicos
@@ -93,7 +98,10 @@ export const evaluationFlags = {
     TES02: { name: 'Thomas Positivo', severity: 2, implies: ['LPA'] },
     TES03: { name: 'Ober Positivo', severity: 2, implies: ['LL'] },
     TES04: { name: 'Flexão Anterior Limitada', severity: 2, implies: ['LSP'] },
-    TES05: { name: 'Rotação Cervical Limitada', severity: 2, implies: ['LBA', 'LE'] }
+    TES05: { name: 'Rotação Cervical Limitada', severity: 2, implies: ['LBA', 'LE'] },
+    TES06: { name: 'Teste do Calço Positivo', severity: 3, implies: ['LSP', 'LL'] }, // calço 1-1.5cm nivela quadril e simetriza Tales = discrepância funcional, indica palmilha
+    TES07: { name: 'Short Foot Test Positivo', severity: 2, implies: ['LPA', 'LL'] }, // apoio unipodal: arco desaba e joelho vai para dentro
+    TES08: { name: 'Ritmo Escapular Alterado', severity: 2, implies: ['LBA'] } // elevação de ombro antes de 90° de abdução
   },
   
   // Flags de Dor
@@ -120,7 +128,8 @@ export const evaluationFlags = {
     CTX01: { name: 'Calçado Instável', severity: 2, implies: ['LL', 'LPA'] },
     CTX02: { name: 'Idade > 70', severity: 3, implies: [] },
     CTX03: { name: 'Retrolistese', severity: 4, implies: ['LSP', 'LPA'], redFlag: true },
-    CTX04: { name: 'Osteopenia', severity: 3, implies: ['LSP'], redFlag: true }
+    CTX04: { name: 'Osteopenia', severity: 3, implies: ['LSP'], redFlag: true },
+    CTX05: { name: 'Pé Rodado 10h10', severity: 2, implies: ['LE', 'LL'] } // rotação externa bilateral = bloqueio de tornozelo/quadril
   },
 
   // Flags de Lesão
@@ -385,8 +394,40 @@ export const diagnosticRules = [
       prognosis: 'Bom - Responde a liberação + ativação (10-14 semanas)',
       protocolRef: 'PROTOCOLO_ANTEVERSAO'
     }
+  },
+
+  // COLAPSO LATERAL (whitepaper 9FIT — escoliose funcional por perna curta)
+  {
+    id: 'DIAG_COLAPSO_LATERAL',
+    name: 'Síndrome de Colapso Lateral (Escoliose Funcional por Perna Curta)',
+    condition: {
+      required: ['PEP19', 'PEP08'],
+      optional: ['PEP18', 'CTX05']
+    },
+    logicRule: 'IF (Triângulo de Tales Assimétrico AND Retroversão/Drop Pélvico) THEN Colapso Lateral',
+    output: {
+      diagnosis: 'Síndrome de Colapso Lateral',
+      severity: 3,
+      affectedLines: ['LL', 'LE', 'LSP'],
+      mechanisms: [
+        'Perna funcionalmente ou anatomicamente mais curta gera queda pélvica de um lado',
+        'Tronco cai para o lado curto, coluna faz curva compensatória para o lado oposto',
+        'Espasmo lombar unilateral crônico tentando conter a queda do tronco',
+        'Confirmar com Teste do Calço: se simetriza com calço de 1-1.5cm, é discrepância funcional (indicar palmilha); se resistir ao calço, é rigidez estrutural'
+      ],
+      prognosis: 'Bom se funcional (responde a palmilha + descompressão); reservado se estrutural',
+      protocolRef: 'PROTOCOLO_COLAPSO_LATERAL'
+    }
   }
 ];
+
+// PARTE 3.1: ARQUÉTIPOS BIOMECÂNICOS — macro-classificação antes das flags
+export const biomechanicalArchetypes = {
+  SWAYBACK: { name: 'Swayback', criteria: 'Quadril à frente do tornozelo + Glúteo inibido', cause: 'Ligamentos frouxos / frouxidão ligamentar' },
+  FLAT_BACK: { name: 'Flat Back', criteria: 'Lombar reta + Retroversão pélvica', cause: 'Isquiotibiais curtos' },
+  CIFOSE_LORDOSE: { name: 'Cifose-Lordose', criteria: 'Bumbum empinado + Corcunda (hipercifose)', cause: 'Síndrome Cruzada Superior e Inferior combinadas' },
+  COLAPSO_LATERAL: { name: 'Colapso Lateral', criteria: 'Um ombro mais baixo + Triângulo de Tales assimétrico', cause: 'Escoliose ou perna curta (real ou funcional)' }
+};
 
 // PARTE 4: PROTOCOLOS DE INTERVENÇÃO - Sistema 9FIT OS
 export const interventionProtocols: Record<string, any> = {
@@ -803,12 +844,40 @@ export const interventionProtocols: Record<string, any> = {
         { name: 'Leg Press Parcial (15-60°)', sets: 4, reps: 12 }
       ]}]}
     ]
+  },
+
+  // COLAPSO LATERAL (whitepaper 9FIT)
+  PROTOCOLO_COLAPSO_LATERAL: {
+    id: 'PROTOCOLO_COLAPSO_LATERAL',
+    name: 'Protocolo Colapso Lateral — Escoliose Funcional / Perna Curta',
+    category: 'coluna',
+    duration: '12-16 semanas',
+    note: 'Se Teste do Calço não simetrizar (rigidez estrutural), encaminhar para avaliação ortopédica/palmilha antes de progredir carga axial.',
+    contraindications: ['Carga axial progressiva antes do diagnóstico diferencial', 'Alongamento passivo unilateral do lado côncavo'],
+    phases: [
+      { name: 'Fase 1 - Diagnóstico Diferencial', blocks: [{ type: 'avaliacao', exercises: [
+        { name: 'Teste do Calço (1-1.5cm sob o lado curto)', sets: 1, reps: 'reavaliar Triângulo de Tales e nivelamento pélvico' }
+      ]}]},
+      { name: 'Fase 2 - Descompressão e Consciência', blocks: [{ type: 'descompressao', exercises: [
+        { name: 'Liberação de Quadrado Lombar (lado curto)', sets: 3, reps: '60s' },
+        { name: 'Consciência Postural em Espelho', sets: 3, reps: '60s' }
+      ]}]},
+      { name: 'Fase 3 - Reativação Assimétrica', blocks: [{ type: 'ativacao', exercises: [
+        { name: 'Subida no Banco (só do lado da queda pélvica)', sets: 3, reps: 10 },
+        { name: 'Ativação de Glúteo Médio Unilateral', sets: 3, reps: 15 }
+      ]}]},
+      { name: 'Fase 4 - Reequilíbrio Rotacional', blocks: [{ type: 'mobilidade', exercises: [
+        { name: 'Mobilidade Torácica em Rotação (lado bloqueado)', sets: 3, reps: 10 },
+        { name: 'Remada Unilateral (lado côncavo)', sets: 4, reps: 12 }
+      ]}]}
+    ]
   }
 };
 
 export default {
   myofascialFoundations,
   evaluationFlags,
+  biomechanicalArchetypes,
   diagnosticRules,
   interventionProtocols
 };
