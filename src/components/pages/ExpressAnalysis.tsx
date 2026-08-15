@@ -6,6 +6,7 @@ import { Zap, Upload, Loader2, ArrowRight, Sparkles, CheckCircle } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import { runPoseAnalysisOnPhotos } from '@/services/runPoseAnalysis';
 
 interface Props { onNavigate: (view: string) => void; }
 
@@ -57,6 +58,7 @@ const ExpressAnalysis = ({ onNavigate }: Props) => {
 
       // 2. Upload fotos
       setProgress('Enviando fotos...');
+      const uploadedPhotos: { imageUrl: string; view: string }[] = [];
       for (const v of VIEWS) {
         const file = files[v.key]!;
         const ext = file.name.split('.').pop();
@@ -73,28 +75,58 @@ const ExpressAnalysis = ({ onNavigate }: Props) => {
           qa_status: 'pass',
           capture_confidence: 0.9,
         });
+        uploadedPhotos.push({ imageUrl: urlData.publicUrl, view: v.view });
       }
 
-      // 3. Dispara análise IA
-      setProgress('Analisando com IA...');
+      // 3. PONTE CENTRAL: roda MediaPipe real nas 4 fotos (mesmo motor do fluxo normal)
+      setProgress('Detectando pontos anatômicos (MediaPipe)...');
       await supabase.from('ppa_assessments' as any).update({ status: 'analisando' }).eq('id', assessmentId);
+      const poseResult = await runPoseAnalysisOnPhotos(uploadedPhotos);
 
+      if (poseResult.posesDetected === 0) {
+        throw new Error('Não foi possível detectar o corpo em nenhuma foto. Verifique o enquadramento e tente novamente.');
+      }
+
+      // 4. Cria o analysis_run e grava achados/métricas reais
       const { data: runData, error: runErr } = await supabase.from('ppa_analysis_runs' as any)
-        .insert({ assessment_id: assessmentId, model_version: 'gemini-3-flash-express', status: 'rascunho' })
+        .insert({ assessment_id: assessmentId, model_version: 'mediapipe-pose-heavy', status: 'rascunho' })
         .select('id').single();
       if (runErr) throw runErr;
       const runId = (runData as any).id;
 
-      // 4. Edge function
+      if (poseResult.findings.length > 0) {
+        await supabase.from('ppa_findings' as any).insert(
+          poseResult.findings.map(f => ({
+            analysis_run_id: runId, finding_key: f.key, direction: f.direction, severity: f.severity, confidence: f.confidence,
+          }))
+        );
+      }
+      if (poseResult.metrics.length > 0) {
+        await supabase.from('ppa_metrics' as any).insert(
+          poseResult.metrics.map(m => ({
+            analysis_run_id: runId, key: m.key, value: m.value, unit: m.unit, severity: m.severity,
+          }))
+        );
+      }
+
+      // 5. Dispara análise IA com o payload CORRETO (findings/metrics/clientData/context/pain)
+      setProgress('Gerando relatório com IA...');
       const { data: report, error: fnErr } = await supabase.functions.invoke('analyze-report', {
-        body: { assessment_id: assessmentId, analysis_run_id: runId, mode: 'express' },
+        body: {
+          findings: poseResult.findings,
+          metrics: poseResult.metrics,
+          clusters: [],
+          clientData: { name: user.email || 'Eu', age: 35, height: 175, weight: 72, sport: '', activity_level: '' },
+          context: { footwear: 'não_informado', surface: 'plano', objective: 'Análise rápida', environment: 'indoor' },
+          pain: { region: 'não_informada', intensity: 0, triggers: 'nenhum' },
+        },
       });
       if (fnErr) console.warn('analyze-report error:', fnErr);
 
       setAssessment(assessmentId, user.id, user.email || 'Eu');
       setAnalysisRunId(runId);
 
-      toast.success('Análise concluída!');
+      toast.success(`Análise concluída! ${poseResult.findings.length} pontos identificados.`);
       onNavigate('results-hud');
     } catch (err: any) {
       toast.error(err.message || 'Erro na análise express');
