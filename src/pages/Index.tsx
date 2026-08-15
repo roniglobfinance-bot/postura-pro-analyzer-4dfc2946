@@ -18,6 +18,7 @@ import ComplaintAnalyser from '@/components/analyser/ComplaintAnalyser';
 import BodyCompositionEstimator from '@/components/analyser/BodyCompositionEstimator';
 import StudentReportView from '@/components/student/StudentReportView';
 import StudentRecommendations from '@/components/student/StudentRecommendations';
+import StudentStretchingPlan from '@/components/student/StudentStretchingPlan';
 import FitProApiSettings from '@/components/pages/FitProApiSettings';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -58,6 +59,8 @@ const Index = () => {
         return <ProgressDashboard />;
       case 'student-report':
         return <StudentReportView />;
+      case 'student-stretching':
+        return <StudentStretchingPlan />;
       case 'student-recommendations':
         return <StudentRecommendations />;
       case 'fitpro-api':
