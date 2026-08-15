@@ -8,6 +8,7 @@ import { Upload, CheckCircle, XCircle, AlertTriangle, ArrowRight, ArrowLeft, Loa
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
+import { runPoseAnalysisOnPhotos } from '@/services/runPoseAnalysis';
 
 interface MediaCollectorProps {
   onNavigate?: (view: string) => void;
@@ -32,9 +33,10 @@ interface MediaItem {
 }
 
 const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
-  const { active, setStatus: setFlowStatus } = useActiveAssessment();
+  const { active, setStatus: setFlowStatus, setAnalysisRunId } = useActiveAssessment();
   const [currentStep, setCurrentStep] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [analysisPhase, setAnalysisPhase] = useState<string>('');
   const [media, setMedia] = useState<Record<string, MediaItem>>(
     Object.fromEntries(MEDIA_STEPS.map(s => [s.key, {
       qaStatus: 'pending',
@@ -111,7 +113,7 @@ const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
     });
     if (insertError) throw insertError;
 
-    return imageUrl;
+    return { imageUrl, view: stepDef.view };
   };
 
   const handleUploadAll = async () => {
@@ -121,18 +123,72 @@ const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
     }
 
     setUploading(true);
+    const uploadedPhotos: { imageUrl: string; view: string }[] = [];
     try {
+      setAnalysisPhase('Enviando fotos...');
       for (const step of MEDIA_STEPS) {
         const item = media[step.key];
         if (item.file && !item.uploaded) {
-          const url = await uploadSinglePhoto(step.key);
-          if (url) {
+          const uploaded = await uploadSinglePhoto(step.key);
+          if (uploaded) {
+            uploadedPhotos.push(uploaded);
             setMedia(prev => ({
               ...prev,
-              [step.key]: { ...prev[step.key], uploaded: true, uploadUrl: url },
+              [step.key]: { ...prev[step.key], uploaded: true, uploadUrl: uploaded.imageUrl },
             }));
           }
         }
+      }
+
+      // === PONTE CENTRAL: roda MediaPipe real nas 4 fotos e gera achados/métricas ===
+      setAnalysisPhase('Detectando pontos anatômicos (MediaPipe)...');
+      const poseResult = await runPoseAnalysisOnPhotos(uploadedPhotos);
+
+      if (poseResult.posesDetected === 0) {
+        toast({
+          title: 'Nenhuma pose detectada',
+          description: 'As fotos foram salvas, mas não foi possível detectar o corpo em nenhuma delas. Verifique o enquadramento e refaça a coleta.',
+          variant: 'destructive',
+        });
+      } else {
+        setAnalysisPhase('Salvando achados biomecânicos...');
+        // Cria o analysis_run que vai receber os achados
+        const { data: runData, error: runError } = await supabase.from('ppa_analysis_runs' as any).insert({
+          assessment_id: active.assessmentId,
+          status: 'rascunho',
+          model_version: 'mediapipe-pose-heavy',
+        }).select('id').single();
+        if (runError) throw runError;
+        const runId = (runData as any).id;
+
+        if (poseResult.findings.length > 0) {
+          await supabase.from('ppa_findings' as any).insert(
+            poseResult.findings.map(f => ({
+              analysis_run_id: runId,
+              finding_key: f.key,
+              direction: f.direction,
+              severity: f.severity,
+              confidence: f.confidence,
+            }))
+          );
+        }
+        if (poseResult.metrics.length > 0) {
+          await supabase.from('ppa_metrics' as any).insert(
+            poseResult.metrics.map(m => ({
+              analysis_run_id: runId,
+              key: m.key,
+              value: m.value,
+              unit: m.unit,
+              severity: m.severity,
+            }))
+          );
+        }
+
+        setAnalysisRunId(runId);
+        toast({
+          title: 'Achados detectados',
+          description: `${poseResult.findings.length} pontos de atenção identificados em ${poseResult.posesDetected}/${poseResult.photosAnalyzed} fotos.`,
+        });
       }
 
       // Update assessment status
@@ -141,12 +197,12 @@ const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
         .eq('id', active.assessmentId);
 
       setFlowStatus('analisando');
-      toast({ title: 'Fotos enviadas', description: 'Todas as fotos foram salvas. Prossiga para análise.' });
       onNavigate?.('results-hud');
     } catch (err: any) {
-      toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro no upload/análise', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
+      setAnalysisPhase('');
     }
   };
 
@@ -277,7 +333,7 @@ const MediaCollector = ({ onNavigate }: MediaCollectorProps) => {
             ) : (
               <Button onClick={handleUploadAll} disabled={!allMinimumPassed || uploading || allUploaded || !active.assessmentId}>
                 {uploading ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {analysisPhase || 'Enviando...'}</>
                 ) : allUploaded ? (
                   <><CheckCircle className="h-4 w-4 mr-2" /> Enviado ✓</>
                 ) : (
