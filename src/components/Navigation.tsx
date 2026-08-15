@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut,
-  Video, MessageSquare, Activity, FileText, ListChecks
+  Video, MessageSquare, Activity, FileText, ListChecks, Flame
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -33,6 +33,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
   const studentMenu = [
     { id: 'dashboard', label: 'Meu Painel', icon: LayoutDashboard },
     { id: 'student-report', label: 'Meu Relatório', icon: FileText },
+    { id: 'student-stretching', label: 'Meu Plano', icon: Flame },
     { id: 'student-recommendations', label: 'Recomendações', icon: ListChecks },
     { id: 'progress-dashboard', label: 'Evolução', icon: TrendingUp },
   ];
