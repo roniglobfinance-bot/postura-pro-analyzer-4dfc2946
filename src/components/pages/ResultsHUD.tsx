@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Activity, AlertTriangle, Brain, CheckCircle, Eye, RefreshCw, Zap, Flame, Ruler,
-  BarChart3, Loader2, Shield, FileText, Save, ArrowRight, MapPin, ShieldAlert,
+  BarChart3, Loader2, Shield, FileText, Save, ArrowRight, MapPin, ShieldAlert, Bone,
 } from 'lucide-react';
 import RiskGauges from '@/components/dashboard/RiskGauges';
 import HeatmapOverlay from '@/components/dashboard/HeatmapOverlay';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
 import { useAuth } from '@/hooks/useAuth';
 import { generateDiagnosticReport, DiagnosticInput, FailSafeResult, NeuroMetabolicAlert } from '@/services/diagnosticEngine';
+import { extractTraumaContext, TraumaContextResult } from '@/services/traumaContextEngine';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from 'lucide-react';
 import PublishToStudent from '@/components/teacher/PublishToStudent';
@@ -68,6 +69,7 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
   const [gpsMapping, setGpsMapping] = useState<Record<string, any> | null>(null);
   const [failSafes, setFailSafes] = useState<FailSafeResult | null>(null);
   const [nmAlerts, setNmAlerts] = useState<NeuroMetabolicAlert[]>([]);
+  const [traumaContext, setTraumaContext] = useState<TraumaContextResult | null>(null);
 
   // Student/assessment selectors
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -148,6 +150,17 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
     loadAssessmentData();
   }, [active.assessmentId, active.analysisRunId]);
 
+  // ETAPA 1 do protocolo 9FIT: TRIAGEM DE TRAUMA.
+  // Roda ANTES da interpretação visual, lendo o histórico de lesões coletado no questionário.
+  useEffect(() => {
+    const historyText = active.context?.historico_lesoes || '';
+    if (historyText) {
+      setTraumaContext(extractTraumaContext(historyText));
+    } else {
+      setTraumaContext(null);
+    }
+  }, [active.context]);
+
   const loadAssessmentData = async () => {
     try {
       const { data: photos } = await supabase
@@ -213,6 +226,11 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
     if (active.context.calcado === 'amortecido' || active.context.calcado === 'instável') flags.push('CTX01');
     const age = Number(active.context.idade);
     if (age && age > 70) flags.push('CTX02');
+
+    // Trauma como bloqueio primário: fraturas/próteses/retirada óssea forçam contexto de fragilidade óssea
+    if (traumaContext?.findings.some(f => ['TRM01', 'TRM04', 'TRM06'].includes(f.code))) {
+      flags.push('CTX04');
+    }
 
     if (flags.length > 0) {
       const input: DiagnosticInput = { flags };
@@ -301,6 +319,13 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
           clientData: { name: active.studentName || 'Cliente', age: Number(active.context.idade) || 35, height: Number(active.context.altura) || 175, weight: Number(active.context.peso) || 72, sport: active.context.esporte || '', activity_level: active.context.nivel_atividade || '' },
           context: { footwear: active.context.calcado || 'não_informado', surface: active.context.superficie || 'plano', objective: active.context.objetivo || 'correção_postural', environment: active.context.ambiente || 'indoor' },
           pain: { region: active.pain.regiao || 'não_informada', intensity: active.pain.intensidade || 0, triggers: active.pain.gatilhos || 'nenhum' },
+          trauma_context: traumaContext?.primaryBlockage ? {
+            primary_blockage: traumaContext.primaryBlockage.label,
+            zone: traumaContext.primaryBlockage.zone,
+            side: traumaContext.primaryBlockage.side,
+            clinical_note: traumaContext.primaryBlockage.clinical_note,
+            narrative: traumaContext.narrative,
+          } : null,
         },
       });
 
@@ -365,6 +390,7 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
           local_diagnoses: localDiagnostics?.diagnoses?.map((d: any) => d.diagnosis) || [],
           fail_safes: failSafes,
           neuro_metabolic_alerts: nmAlerts,
+          trauma_context: traumaContext,
         },
       });
 
@@ -394,6 +420,21 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
           </Badge>
         </div>
       </div>
+
+      {/* BLOQUEIO PRIMÁRIO — Camada de Trauma (Etapa 1 do protocolo 9FIT) */}
+      {traumaContext?.primaryBlockage && (
+        <Alert className="border-amber-400 bg-amber-50">
+          <Bone className="h-4 w-4 text-amber-700" />
+          <AlertDescription>
+            <strong className="text-amber-900">🦴 Bloqueio Primário: {traumaContext.primaryBlockage.label}</strong>
+            {traumaContext.primaryBlockage.zone && (
+              <span className="text-amber-800"> — {traumaContext.primaryBlockage.zone}{traumaContext.primaryBlockage.side ? ` (${traumaContext.primaryBlockage.side === 'D' ? 'lado direito' : 'lado esquerdo'})` : ''}</span>
+            )}
+            <p className="text-xs text-amber-800 mt-1">{traumaContext.primaryBlockage.clinical_note}</p>
+            <p className="text-xs text-amber-700 mt-1 italic">Todo desvio postural detectado abaixo deve ser lido como compensação a partir deste ponto.</p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Student / Assessment selector for teachers */}
       {isTeacher && (
@@ -619,6 +660,28 @@ const ResultsHUD = ({ onNavigate }: ResultsHUDProps) => {
                   <div key={i} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'border-red-300 bg-red-50' : 'border-orange-300 bg-orange-50'}`}>
                     <p className="text-sm font-medium">{a.message}</p>
                     <p className="text-xs text-muted-foreground mt-1">💊 {a.recommendation}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {traumaContext && traumaContext.findings.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Bone className="h-4 w-4" /> Histórico de Trauma ({traumaContext.findings.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {traumaContext.findings.map((f, i) => (
+                  <div key={i} className={`p-3 rounded-lg border ${f.priority === 'critico' ? 'border-red-300 bg-red-50' : 'border-amber-300 bg-amber-50'}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className={f.priority === 'critico' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}>{f.code}</Badge>
+                      <span className="text-sm font-medium">{f.label}</span>
+                      {f.zone && <Badge variant="outline" className="text-xs">{f.zone}{f.side ? ` (${f.side})` : ''}</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{f.clinical_note}</p>
                   </div>
                 ))}
               </CardContent>
