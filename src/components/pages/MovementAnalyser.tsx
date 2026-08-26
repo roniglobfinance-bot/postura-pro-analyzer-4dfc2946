@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Video, AlertTriangle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, Video, AlertTriangle, Footprints } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { extractVideoAnalysisData, type AngleTrajectoryPoint } from '@/services/videoFrameExtractionService';
+import { analyzeGait, GaitInput, GaitAnalysisResult } from '@/services/gaitEngine';
 
 interface MovementAnalyserProps { onNavigate?: (v: string) => void; studentId?: string; assessmentId?: string; }
 
@@ -21,6 +23,26 @@ export const MovementAnalyser = ({ studentId, assessmentId }: MovementAnalyserPr
   const [analysing, setAnalysing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // === Gait Engine (item 2 do dossiê) — checklist observacional de marcha ===
+  const [gaitInput, setGaitInput] = useState<GaitInput>({
+    trunkRotatesWithStep: false,
+    limping: false,
+    usesAnkleForPropulsion: true,
+    hipExtensionOnBackswingLimited: false,
+    recentLumbarPainRelief: false,
+  });
+  const [gaitResult, setGaitResult] = useState<GaitAnalysisResult | null>(null);
+
+  const runGaitAnalysis = () => {
+    const analysisResult = analyzeGait(gaitInput);
+    setGaitResult(analysisResult);
+    if (analysisResult.flags.length === 0) {
+      toast.success('Nenhum padrão de bloqueio de marcha identificado');
+    } else {
+      toast.warning(`${analysisResult.flags.length} padrão(ões) de marcha identificado(s)`);
+    }
+  };
 
   const handleVideo = async (file: File) => {
     setResult(null);
@@ -113,6 +135,97 @@ export const MovementAnalyser = ({ studentId, assessmentId }: MovementAnalyserPr
           </Button>
         </CardContent>
       </Card>
+
+      {/* GAIT ENGINE — aparece só quando o exercício selecionado é "Marcha" */}
+      {exercise === 'marcha' && (
+        <Card className="border-blue-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Footprints className="h-4 w-4" /> Checklist de Marcha (Motor Local)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">Observe o aluno caminhando e marque o que for aplicável:</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={gaitInput.trunkRotatesWithStep}
+                  onCheckedChange={v => setGaitInput(prev => ({ ...prev, trunkRotatesWithStep: !!v }))}
+                />
+                <Label className="text-sm font-normal">Tronco gira junto com o passo (falta de dissociação)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={gaitInput.hipExtensionOnBackswingLimited}
+                  onCheckedChange={v => setGaitInput(prev => ({ ...prev, hipExtensionOnBackswingLimited: !!v }))}
+                />
+                <Label className="text-sm font-normal">Dificuldade de estender o quadril ao levar a perna para trás</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={gaitInput.limping}
+                  onCheckedChange={v => setGaitInput(prev => ({ ...prev, limping: !!v }))}
+                />
+                <Label className="text-sm font-normal">Manqueira / apoio assimétrico visível</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={!gaitInput.usesAnkleForPropulsion}
+                  onCheckedChange={v => setGaitInput(prev => ({ ...prev, usesAnkleForPropulsion: !v }))}
+                />
+                <Label className="text-sm font-normal">Não usa o tornozelo/dedos para impulsionar (arrasta o pé)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={gaitInput.recentLumbarPainRelief}
+                  onCheckedChange={v => setGaitInput(prev => ({ ...prev, recentLumbarPainRelief: !!v }))}
+                />
+                <Label className="text-sm font-normal">Dor lombar aliviou recentemente (contexto: pós-tratamento)</Label>
+              </div>
+            </div>
+            <Button onClick={runGaitAnalysis} variant="outline" className="w-full">
+              <Footprints className="h-4 w-4 mr-2" /> Analisar Padrão de Marcha
+            </Button>
+
+            {gaitResult && (
+              <div className="space-y-2 pt-2 border-t">
+                {gaitResult.flags.length === 0 ? (
+                  <p className="text-sm text-green-700">✅ Nenhum padrão de bloqueio identificado.</p>
+                ) : (
+                  <>
+                    {gaitResult.diagnosis && (
+                      <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                        <p className="text-sm font-medium text-blue-900">{gaitResult.diagnosis}</p>
+                      </div>
+                    )}
+                    {gaitResult.flags.map(f => (
+                      <div key={f.code} className="p-2 rounded border bg-muted/30">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline" className="text-xs">{f.code}</Badge>
+                          <span className="text-sm font-medium">{f.label}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{f.clinical_note}</p>
+                      </div>
+                    ))}
+                    {gaitResult.dissociation_protocol.length > 0 && (
+                      <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+                        <p className="text-sm font-medium text-green-800 mb-2">🔓 Protocolo de Dissociação Tronco-Quadril</p>
+                        <ul className="space-y-1">
+                          {gaitResult.dissociation_protocol.map((step, i) => (
+                            <li key={i} className="text-xs text-green-700 flex gap-1">
+                              <span className="font-bold">{i + 1}.</span> {step}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {result && (
         <Card>
