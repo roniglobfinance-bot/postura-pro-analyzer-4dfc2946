@@ -7,11 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle, Play, Square, Loader2, ArrowRight, Clock, Info } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertTriangle, CheckCircle, Play, Square, Loader2, ArrowRight, Clock, Info, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useActiveAssessment } from '@/contexts/ActiveAssessmentContext';
 import { analyzeSessionReadiness, PeriodizerResult, SessionHistory } from '@/services/smartPeriodizer';
+import { classifyTremor, TremorInput, TremorClassificationResult } from '@/services/tremorProtocol';
 
 interface SessionTrackerProps {
   onNavigate?: (view: string) => void;
@@ -32,6 +34,18 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
   const [activePlan, setActivePlan] = useState<any>(null);
   const [planProtocols, setPlanProtocols] = useState<string[]>([]);
   const [periodizerResult, setPeriodizerResult] = useState<PeriodizerResult | null>(null);
+
+  // === Protocolo de Tremor (item 5 do dossiê) ===
+  const [showTremorCheck, setShowTremorCheck] = useState(false);
+  const [tremorForm, setTremorForm] = useState<Partial<TremorInput>>({
+    duringSet: true,
+    intensity: 'leve',
+    location: '',
+    hasNumbnessOrTingling: false,
+    ableToWalkNormallyAfter: true,
+    recoveredWithin24h: undefined,
+  });
+  const [tremorResult, setTremorResult] = useState<TremorClassificationResult | null>(null);
 
   // Load active plan + periodizer check
   useEffect(() => {
@@ -110,9 +124,38 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
     if (event === 'Dor subiu' && painToday[0] >= 6) {
       setStatus('fail');
       handleFallbackShield();
-    } else if (event === 'Tremor' && tns[0] > 70) {
+    } else if (event === 'Tremor') {
+      // Abre o check-in estruturado de tremor em vez de só marcar TNS alto
+      setShowTremorCheck(true);
+      setTremorResult(null);
+    }
+  };
+
+  const runTremorClassification = () => {
+    if (!tremorForm.location) {
+      toast({ title: 'Informe onde ocorreu o tremor', variant: 'destructive' });
+      return;
+    }
+    const input: TremorInput = {
+      duringSet: tremorForm.duringSet ?? true,
+      intensity: tremorForm.intensity ?? 'leve',
+      location: tremorForm.location,
+      hasNumbnessOrTingling: tremorForm.hasNumbnessOrTingling,
+      ableToWalkNormallyAfter: tremorForm.ableToWalkNormallyAfter,
+      recoveredWithin24h: tremorForm.recoveredWithin24h,
+    };
+    const classification = classifyTremor(input);
+    setTremorResult(classification);
+    setEvents(prev => [...prev, `${new Date().toLocaleTimeString()} — Tremor (${tremorForm.location}): ${classification.label}`]);
+
+    if (classification.requires_medical_attention) {
+      setStatus('fail');
+      toast({ title: '🚨 ' + classification.label, description: classification.recommendation, variant: 'destructive' });
+    } else if (classification.classification === 'possivel_choque_excessivo') {
       setStatus('watch');
-      toast({ title: '⚠️ TREMOR_ESCAPE_RISK', description: 'TNS alto + tremor.', variant: 'destructive' });
+      toast({ title: '⚠️ ' + classification.label, description: classification.recommendation });
+    } else {
+      toast({ title: '✅ ' + classification.label, description: classification.recommendation });
     }
   };
 
@@ -274,6 +317,77 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
               </div>
             </CardContent>
           </Card>
+
+          {/* PROTOCOLO DE TREMOR — check-in estruturado ao clicar em "Tremor" */}
+          {showTremorCheck && (
+            <Card className="border-yellow-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Zap className="h-4 w-4" /> Check-in de Tremor
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label className="text-xs">Onde ocorreu?</Label>
+                  <input
+                    className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background"
+                    placeholder="ex: perna esquerda, ombro..."
+                    value={tremorForm.location || ''}
+                    onChange={e => setTremorForm(prev => ({ ...prev, location: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Intensidade</Label>
+                  <Select value={tremorForm.intensity} onValueChange={(v: any) => setTremorForm(prev => ({ ...prev, intensity: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="leve">Leve</SelectItem>
+                      <SelectItem value="moderado">Moderado</SelectItem>
+                      <SelectItem value="severo">Severo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={tremorForm.duringSet}
+                    onCheckedChange={v => setTremorForm(prev => ({ ...prev, duringSet: !!v }))}
+                  />
+                  <Label className="text-sm font-normal">Aconteceu durante a série (não depois)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={tremorForm.hasNumbnessOrTingling}
+                    onCheckedChange={v => setTremorForm(prev => ({ ...prev, hasNumbnessOrTingling: !!v }))}
+                  />
+                  <Label className="text-sm font-normal">Veio junto com formigamento ou dormência</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={tremorForm.ableToWalkNormallyAfter}
+                    onCheckedChange={v => setTremorForm(prev => ({ ...prev, ableToWalkNormallyAfter: !!v }))}
+                  />
+                  <Label className="text-sm font-normal">Consegue andar/mover normalmente agora</Label>
+                </div>
+
+                <Button onClick={runTremorClassification} className="w-full" size="sm">
+                  Classificar Tremor
+                </Button>
+
+                {tremorResult && (
+                  <div className={`p-3 rounded-lg border ${
+                    tremorResult.requires_medical_attention ? 'border-red-400 bg-red-50' :
+                    tremorResult.classification === 'possivel_choque_excessivo' ? 'border-orange-300 bg-orange-50' :
+                    'border-green-300 bg-green-50'
+                  }`}>
+                    <p className="text-sm font-bold">{tremorResult.label}</p>
+                    <p className="text-xs mt-1">{tremorResult.explanation}</p>
+                    <p className="text-xs mt-2 font-medium">→ {tremorResult.recommendation}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card><CardContent className="p-4 space-y-3">
             <Label>TNS: {tns[0]}</Label>
             <Slider value={tns} onValueChange={setTns} max={100} step={1} />
@@ -300,7 +414,7 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
             <p>• Cat-Cow Respirado (3x8)</p>
             <p>• Diafragma 360 (3x10)</p>
           </div>
-          <Button variant="outline" onClick={() => { setStatus('precheck'); setEvents([]); }}>Nova Sessão</Button>
+          <Button variant="outline" onClick={() => { setStatus('precheck'); setEvents([]); setShowTremorCheck(false); }}>Nova Sessão</Button>
         </div>
       )}
 
