@@ -20,6 +20,7 @@ import StudentReportView from '@/components/student/StudentReportView';
 import StudentRecommendations from '@/components/student/StudentRecommendations';
 import StudentStretchingPlan from '@/components/student/StudentStretchingPlan';
 import FitProApiSettings from '@/components/pages/FitProApiSettings';
+import HighPerformanceEngine from '@/components/pages/HighPerformanceEngine';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
@@ -45,6 +46,8 @@ const Index = () => {
         return <ComplaintAnalyser studentId={user?.id} />;
       case 'body-composition':
         return <BodyCompositionEstimator studentId={user?.id} />;
+      case 'high-performance':
+        return <HighPerformanceEngine onNavigate={setCurrentView} />;
       case 'media-collector':
         return <MediaCollector onNavigate={setCurrentView} />;
       case 'results-hud':
