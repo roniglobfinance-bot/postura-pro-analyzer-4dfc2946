@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import {
   Users, BarChart3, BookOpen, Scan, Brain, Camera, TrendingUp, LayoutDashboard, Zap, LogOut,
-  Video, MessageSquare, Activity, FileText, ListChecks, Flame
+  Video, MessageSquare, Activity, FileText, ListChecks, Flame, Gauge
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -22,6 +22,7 @@ const Navigation = ({ activeSection, onSectionChange }: NavigationProps) => {
     { id: 'movement-analyser', label: 'Mov. Analyser', icon: Video },
     { id: 'complaint-analyser', label: 'Queixa', icon: MessageSquare },
     { id: 'body-composition', label: 'Composição', icon: Activity },
+    { id: 'high-performance', label: 'Alta Performance', icon: Gauge },
     { id: 'results-hud', label: 'Resultados', icon: BarChart3 },
     { id: 'plan-builder', label: 'Plano', icon: Brain },
     { id: 'session-tracker', label: 'Sessões', icon: Camera },
