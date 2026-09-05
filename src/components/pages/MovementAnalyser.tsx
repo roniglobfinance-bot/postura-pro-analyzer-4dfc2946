@@ -33,8 +33,47 @@ export const MovementAnalyser = ({ studentId, assessmentId }: MovementAnalyserPr
     recentLumbarPainRelief: false,
   });
   const [gaitResult, setGaitResult] = useState<GaitAnalysisResult | null>(null);
+  const [savingGait, setSavingGait] = useState(false);
 
-  const runGaitAnalysis = () => {
+  // Busca a run de análise mais recente vinculada ao assessment atual
+  const getLatestAnalysisRunId = async (): Promise<string | null> => {
+    if (!assessmentId) return null;
+    const { data, error } = await supabase
+      .from('ppa_analysis_runs' as any)
+      .select('id')
+      .eq('assessment_id', assessmentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error('Erro ao buscar analysis_run:', error.message);
+      return null;
+    }
+    return (data as any)?.id ?? null;
+  };
+
+  const persistGaitAnalysis = async (analysisResult: GaitAnalysisResult) => {
+    setSavingGait(true);
+    try {
+      const runId = await getLatestAnalysisRunId();
+      if (!runId) {
+        toast.warning('Análise de marcha calculada, mas nenhuma avaliação ativa foi encontrada para salvar');
+        return;
+      }
+      const { error } = await supabase
+        .from('ppa_analysis_runs' as any)
+        .update({ gait_analysis: analysisResult })
+        .eq('id', runId);
+      if (error) throw error;
+    } catch (e: any) {
+      console.error('Falha ao persistir gait_analysis:', e.message);
+      toast.error('Análise de marcha calculada, mas não foi possível salvar no histórico');
+    } finally {
+      setSavingGait(false);
+    }
+  };
+
+  const runGaitAnalysis = async () => {
     const analysisResult = analyzeGait(gaitInput);
     setGaitResult(analysisResult);
     if (analysisResult.flags.length === 0) {
@@ -42,6 +81,7 @@ export const MovementAnalyser = ({ studentId, assessmentId }: MovementAnalyserPr
     } else {
       toast.warning(`${analysisResult.flags.length} padrão(ões) de marcha identificado(s)`);
     }
+    await persistGaitAnalysis(analysisResult);
   };
 
   const handleVideo = async (file: File) => {
@@ -183,8 +223,8 @@ export const MovementAnalyser = ({ studentId, assessmentId }: MovementAnalyserPr
                 <Label className="text-sm font-normal">Dor lombar aliviou recentemente (contexto: pós-tratamento)</Label>
               </div>
             </div>
-            <Button onClick={runGaitAnalysis} variant="outline" className="w-full">
-              <Footprints className="h-4 w-4 mr-2" /> Analisar Padrão de Marcha
+            <Button onClick={runGaitAnalysis} variant="outline" className="w-full" disabled={savingGait}>
+              {savingGait ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : <><Footprints className="h-4 w-4 mr-2" /> Analisar Padrão de Marcha</>}
             </Button>
 
             {gaitResult && (
