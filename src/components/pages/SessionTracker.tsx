@@ -21,6 +21,19 @@ interface SessionTrackerProps {
 
 type SessionStatus = 'precheck' | 'executando' | 'finalizado' | 'watch' | 'fail';
 
+interface TremorEventRecord {
+  timestamp: string;
+  location: string;
+  intensity: string;
+  during_set: boolean;
+  has_numbness_or_tingling?: boolean;
+  able_to_walk_normally_after?: boolean;
+  recovered_within_24h?: boolean;
+  classification: string;
+  label: string;
+  requires_medical_attention: boolean;
+}
+
 const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
   const { active } = useActiveAssessment();
   const [status, setStatus] = useState<SessionStatus>('precheck');
@@ -46,6 +59,7 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
     recoveredWithin24h: undefined,
   });
   const [tremorResult, setTremorResult] = useState<TremorClassificationResult | null>(null);
+  const [tremorEvents, setTremorEvents] = useState<TremorEventRecord[]>([]);
 
   // Load active plan + periodizer check
   useEffect(() => {
@@ -148,6 +162,20 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
     setTremorResult(classification);
     setEvents(prev => [...prev, `${new Date().toLocaleTimeString()} — Tremor (${tremorForm.location}): ${classification.label}`]);
 
+    // Registro estruturado — persistido em ppa_monitoring_logs.tremor_events ao finalizar a sessão
+    setTremorEvents(prev => [...prev, {
+      timestamp: new Date().toISOString(),
+      location: input.location,
+      intensity: input.intensity,
+      during_set: input.duringSet,
+      has_numbness_or_tingling: input.hasNumbnessOrTingling,
+      able_to_walk_normally_after: input.ableToWalkNormallyAfter,
+      recovered_within_24h: input.recoveredWithin24h,
+      classification: classification.classification,
+      label: classification.label,
+      requires_medical_attention: classification.requires_medical_attention,
+    }]);
+
     if (classification.requires_medical_attention) {
       setStatus('fail');
       toast({ title: '🚨 ' + classification.label, description: classification.recommendation, variant: 'destructive' });
@@ -201,6 +229,7 @@ const SessionTracker = ({ onNavigate }: SessionTrackerProps) => {
         tns: tns[0],
         pain_delta: { pre: painToday[0], events: events.filter(e => e.includes('Dor subiu')).length, final_tns: tns[0] },
         notes: `${notes}\n\nEventos:\n${events.join('\n')}`,
+        tremor_events: tremorEvents,
       });
       if (error) throw error;
 
